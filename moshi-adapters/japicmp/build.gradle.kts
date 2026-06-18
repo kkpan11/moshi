@@ -9,11 +9,9 @@ val baseline = configurations.create("baseline")
 val latest = configurations.create("latest")
 
 dependencies {
-  baseline("com.squareup.moshi:moshi-adapters:1.15.1") {
+  baseline("com.squareup.moshi:moshi-adapters:1.15.2") {
     isTransitive = false
-    version {
-      strictly("1.14.0")
-    }
+    version { strictly("1.14.0") }
   }
   latest(project(":moshi-adapters"))
 }
@@ -30,6 +28,4 @@ val japicmp =
     includeSynthetic.set(true)
   }
 
-tasks.named("check").configure {
-  dependsOn(japicmp)
-}
+tasks.named("check").configure { dependsOn(japicmp) }

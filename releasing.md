@@ -1,16 +1,12 @@
-Releasing
-=========
-
-### Prerequisite: Sonatype (Maven Central) Account
-
-Create an account on the [Sonatype issues site][sonatype_issues]. Ask an existing publisher to open
-an issue requesting publishing permissions for `com.squareup` projects.
-
+# Releasing
 
 Cutting a Release
 -----------------
 
-1. Update `CHANGELOG.md`.
+1. Update the `CHANGELOG.md`:
+   1. Change the `Unreleased` header to the release version.
+   2. Add a link URL to ensure the header link works.
+   3. Add a new `Unreleased` section to the top.
 
 2. Set versions:
 
@@ -19,43 +15,25 @@ Cutting a Release
     export NEXT_VERSION=X.Y.Z-SNAPSHOT
     ```
 
-3. Update versions:
+3. Update versions, tag the release, and prepare for the next release.
 
-    ```
+    ```bash
     sed -i "" \
       "s/VERSION_NAME=.*/VERSION_NAME=$RELEASE_VERSION/g" \
       gradle.properties
     sed -i "" \
-      "s/\"com.squareup.moshi:\([^\:]*\):[^\"]*\"/\"com.squareup.moshi:\1:$RELEASE_VERSION\"/g" \
+      "s/\"com.squareup.moshi:\([^\:]*\):[0-9.]*\"/\"com.squareup.moshi:\1:$RELEASE_VERSION\"/g" \
       `find . -name "README.md"`
-    ```
 
-4. Tag the release and push to GitHub.
+    git commit -am "Prepare version $RELEASE_VERSION."
+    git tag -am "Version $RELEASE_VERSION" $RELEASE_VERSION
 
-    ```
-    git commit -am "Prepare for release $RELEASE_VERSION."
-    git tag -a parent-$RELEASE_VERSION -m "Version $RELEASE_VERSION"
-    git push && git push --tags
-    ```
-
-5. Wait for [GitHub Actions][github_actions] to start building the release.
-
-6. Prepare for ongoing development and push to GitHub.
-
-    ```
     sed -i "" \
       "s/VERSION_NAME=.*/VERSION_NAME=$NEXT_VERSION/g" \
       gradle.properties
     git commit -am "Prepare next development version."
-    git push
+    git push && git push --tags
     ```
 
-7. Wait for [GitHub Actions][github_actions] to build and publish releases for both Windows and
-   Non-Windows.
-
-8. Visit [Sonatype Nexus][sonatype_nexus] to promote (close then release) the releases. Or drop it
-   if there is a problem!
-
- [github_actions]: https://github.com/square/moshi/actions
- [sonatype_issues]: https://issues.sonatype.org/
- [sonatype_nexus]: https://s01.oss.sonatype.org/
+This will trigger a GitHub Action workflow which will create a GitHub release and upload the
+release artifacts to Maven Central.

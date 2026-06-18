@@ -23,13 +23,11 @@ import com.squareup.moshi.JsonReader.Token.STRING
 import com.squareup.moshi.JsonWriter
 import com.squareup.moshi.internal.jsonName
 import okio.IOException
-import java.lang.NoSuchFieldException
 
 /**
  * A JsonAdapter for enums that allows having a fallback enum value when a deserialized string does
  * not match any enum value. To use, add this as an adapter for your enum type on your
  * [Moshi.Builder][com.squareup.moshi.Moshi.Builder]:
- *
  * ```
  * Moshi moshi = new Moshi.Builder()
  *   .add(CurrencyCode.class, EnumJsonAdapter.create(CurrencyCode.class)
@@ -37,28 +35,20 @@ import java.lang.NoSuchFieldException
  *   .build();
  * ```
  */
-public class EnumJsonAdapter<T : Enum<T>> internal constructor(
+public class EnumJsonAdapter<T : Enum<T>>
+internal constructor(
   private val enumType: Class<T>,
   private val fallbackValue: T?,
   private val useFallbackValue: Boolean,
-) : JsonAdapter<T>() {
+) : JsonAdapter<T?>() {
 
-  private val constants: Array<T>
-  private val options: Options
-  private val nameStrings: Array<String>
-
-  init {
-    try {
-      constants = enumType.enumConstants
-      nameStrings = Array(constants.size) { i ->
-        val constantName = constants[i].name
-        enumType.getField(constantName).jsonName(constantName)
-      }
-      options = Options.of(*nameStrings)
-    } catch (e: NoSuchFieldException) {
-      throw AssertionError("Missing field in ${enumType.name}", e)
+  private val constants = enumType.enumConstants
+  private val nameStrings =
+    Array(constants.size) { i ->
+      val constantName = constants[i].name
+      enumType.getField(constantName).jsonName(constantName)
     }
-  }
+  private val options = Options.of(*nameStrings)
 
   /**
    * Create a new adapter for this enum with a fallback value to use when the JSON string does not
@@ -77,13 +67,11 @@ public class EnumJsonAdapter<T : Enum<T>> internal constructor(
     if (!useFallbackValue) {
       val name = reader.nextString()
       throw JsonDataException(
-        "Expected one of ${nameStrings.toList()} but was $name at path ${reader.path}",
+        "Expected one of ${nameStrings.toList()} but was $name at path ${reader.path}"
       )
     }
     if (reader.peek() != STRING) {
-      throw JsonDataException(
-        "Expected a string but was ${reader.peek()} at path ${reader.path}",
-      )
+      throw JsonDataException("Expected a string but was ${reader.peek()} at path ${reader.path}")
     }
     reader.skipValue()
     return fallbackValue
@@ -92,9 +80,7 @@ public class EnumJsonAdapter<T : Enum<T>> internal constructor(
   @Throws(IOException::class)
   override fun toJson(writer: JsonWriter, value: T?) {
     if (value == null) {
-      throw NullPointerException(
-        "value was null! Wrap in .nullSafe() to write nullable values.",
-      )
+      throw NullPointerException("value was null! Wrap in .nullSafe() to write nullable values.")
     }
     writer.value(nameStrings[value.ordinal])
   }

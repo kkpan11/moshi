@@ -28,17 +28,13 @@ import kotlin.annotation.AnnotationTarget.TYPE
 
 // Regression test for https://github.com/square/moshi/issues/905
 @JsonClass(generateAdapter = true)
-data class GenericTestClassWithDefaults<T>(
-  val input: String = "",
-  val genericInput: T,
-)
+data class GenericTestClassWithDefaults<T>(val input: String = "", val genericInput: T)
 
-@Target(TYPE)
-annotation class TypeAnnotation
+@Target(TYPE) annotation class TypeAnnotation
 
 /**
- * Compilation-only test to ensure we don't render types with their annotations.
- * Regression test for https://github.com/square/moshi/issues/1033
+ * Compilation-only test to ensure we don't render types with their annotations. Regression test for
+ * https://github.com/square/moshi/issues/1033
  */
 @JsonClass(generateAdapter = true)
 data class TypeAnnotationClass(
@@ -47,14 +43,10 @@ data class TypeAnnotationClass(
 )
 
 // Regression test for https://github.com/square/moshi/issues/1277
-@JsonClass(generateAdapter = true)
-data class OtherTestModel(val TestModel: TestModel? = null)
+@JsonClass(generateAdapter = true) data class OtherTestModel(val TestModel: TestModel? = null)
 
 @JsonClass(generateAdapter = true)
-data class TestModel(
-  val someVariable: Int,
-  val anotherVariable: String,
-)
+data class TestModel(val someVariable: Int, val anotherVariable: String)
 
 // Regression test for https://github.com/square/moshi/issues/1022
 @JsonClass(generateAdapter = true)
@@ -63,10 +55,7 @@ internal data class MismatchParentAndNestedClassVisibility(
   val name: String? = null,
 ) {
 
-  @JsonClass(generateAdapter = true)
-  data class NestedClass(
-    val nestedProperty: String,
-  )
+  @JsonClass(generateAdapter = true) data class NestedClass(val nestedProperty: String)
 }
 
 // Regression test for https://github.com/square/moshi/issues/1052
@@ -81,10 +70,7 @@ data class KeysWithSpaces(
 )
 
 // Regression test for https://github.com/square/moshi/issues/848
-@JsonClass(generateAdapter = true)
-data class Hotwords(
-  val `class`: List<String>?,
-)
+@JsonClass(generateAdapter = true) data class Hotwords(val `class`: List<String>?)
 
 /**
  * This is here mostly just to ensure it still compiles. Covers variance, @Json, default values,
@@ -112,7 +98,8 @@ data class SmokeTestType(
   val favoriteThreeNumbers: IntArray,
   val favoriteArrayValues: Array<String>,
   val favoriteNullableArrayValues: Array<String?>,
-  val nullableSetListMapArrayNullableIntWithDefault: Set<List<Map<String, Array<IntArray?>>>>? = null,
+  val nullableSetListMapArrayNullableIntWithDefault: Set<List<Map<String, Array<IntArray?>>>>? =
+    null,
   val aliasedName: TypeAliasName = "Woah",
   val genericAlias: GenericTypeAlias = listOf("Woah"),
   // Regression test for https://github.com/square/moshi/issues/1272
@@ -120,24 +107,20 @@ data class SmokeTestType(
 )
 
 typealias TypeAliasName = String
+
 typealias GenericTypeAlias = List<String>
 
 // Regression test for enum constants in annotations and array types
 // https://github.com/ZacSweers/MoshiX/issues/103
-@Retention(RUNTIME)
-@JsonQualifier
-annotation class UpperCase(val foo: Array<Foo>)
+@Retention(RUNTIME) @JsonQualifier annotation class UpperCase(val foo: Array<Foo>)
 
-enum class Foo { BAR }
+enum class Foo {
+  BAR
+}
 
 @JsonClass(generateAdapter = true)
-data class ClassWithQualifier(
-  @UpperCase(foo = [Foo.BAR])
-  val a: Int,
-)
+data class ClassWithQualifier(@UpperCase(foo = [Foo.BAR]) val a: Int)
 
 // Regression for https://github.com/ZacSweers/MoshiX/issues/120
 @JsonClass(generateAdapter = true)
-data class DataClassInModuleB(
-  val id: String,
-) : AbstractClassInModuleA()
+data class DataClassInModuleB(val id: String) : AbstractClassInModuleA()

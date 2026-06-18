@@ -20,29 +20,32 @@ import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.JsonDataException
+import com.squareup.moshi.JsonQualifier
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.ToJson
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlin.annotation.AnnotationRetention.RUNTIME
 import org.intellij.lang.annotations.Language
 import org.junit.Assert.fail
 import org.junit.Test
-import kotlin.annotation.AnnotationRetention.RUNTIME
 
 class DualKotlinTest {
 
   @Suppress("UNCHECKED_CAST")
-  private val moshi = Moshi.Builder()
-    // If code gen ran, the generated adapter will be tried first. If it can't find it, it will
-    // gracefully fall back to the KotlinJsonAdapter. This allows us to easily test both.
-    .addLast(KotlinJsonAdapterFactory())
-    .build()
+  private val moshi =
+    Moshi.Builder()
+      // If code gen ran, the generated adapter will be tried first. If it can't find it, it will
+      // gracefully fall back to the KotlinJsonAdapter. This allows us to easily test both.
+      .addLast(KotlinJsonAdapterFactory())
+      .build()
 
-  @Test fun requiredValueAbsent() {
+  @Test
+  fun requiredValueAbsent() {
     val jsonAdapter = moshi.adapter<RequiredValueAbsent>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("""{"a":4}""")
       fail()
     } catch (expected: JsonDataException) {
@@ -50,29 +53,32 @@ class DualKotlinTest {
     }
   }
 
-  @JsonClass(generateAdapter = true)
-  class RequiredValueAbsent(var a: Int = 3, var b: Int)
+  @JsonClass(generateAdapter = true) class RequiredValueAbsent(var a: Int = 3, var b: Int)
 
-  @Test fun requiredValueWithDifferentJsonNameAbsent() {
+  @Test
+  fun requiredValueWithDifferentJsonNameAbsent() {
     val jsonAdapter = moshi.adapter<RequiredValueWithDifferentJsonNameAbsent>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("""{"a":4}""")
       fail()
     } catch (expected: JsonDataException) {
-      assertThat(expected).hasMessageThat().isEqualTo("Required value 'b' (JSON name 'bPrime') missing at \$")
+      assertThat(expected)
+        .hasMessageThat()
+        .isEqualTo("Required value 'b' (JSON name 'bPrime') missing at \$")
     }
   }
 
   @JsonClass(generateAdapter = true)
   class RequiredValueWithDifferentJsonNameAbsent(var a: Int = 3, @Json(name = "bPrime") var b: Int)
 
-  @Test fun nonNullPropertySetToNullFailsWithJsonDataException() {
+  @Test
+  fun nonNullPropertySetToNullFailsWithJsonDataException() {
     val jsonAdapter = moshi.adapter<HasNonNullProperty>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("{\"a\":null}")
       fail()
     } catch (expected: JsonDataException) {
@@ -80,20 +86,21 @@ class DualKotlinTest {
     }
   }
 
-  @Test fun nonNullPropertySetToNullFromAdapterFailsWithJsonDataException() {
-    val jsonAdapter = moshi.newBuilder()
-      .add(
-        object {
-          @Suppress("UNUSED_PARAMETER")
-          @FromJson
-          fun fromJson(string: String): String? = null
-        },
-      )
-      .build()
-      .adapter<HasNonNullProperty>()
+  @Test
+  fun nonNullPropertySetToNullFromAdapterFailsWithJsonDataException() {
+    val jsonAdapter =
+      moshi
+        .newBuilder()
+        .add(
+          object {
+            @Suppress("UNUSED_PARAMETER") @FromJson fun fromJson(string: String): String? = null
+          }
+        )
+        .build()
+        .adapter<HasNonNullProperty>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("{\"a\":\"hello\"}")
       fail()
     } catch (expected: JsonDataException) {
@@ -106,50 +113,56 @@ class DualKotlinTest {
     var a: String = ""
   }
 
-  @Test fun nonNullPropertyWithJsonNameSetToNullFailsWithJsonDataException() {
+  @Test
+  fun nonNullPropertyWithJsonNameSetToNullFailsWithJsonDataException() {
     val jsonAdapter = moshi.adapter<HasNonNullPropertyDifferentJsonName>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("{\"aPrime\":null}")
       fail()
     } catch (expected: JsonDataException) {
-      assertThat(expected).hasMessageThat().isEqualTo("Non-null value 'a' (JSON name 'aPrime') was null at \$.aPrime")
+      assertThat(expected)
+        .hasMessageThat()
+        .isEqualTo("Non-null value 'a' (JSON name 'aPrime') was null at \$.aPrime")
     }
   }
 
-  @Test fun nonNullPropertyWithJsonNameSetToNullFromAdapterFailsWithJsonDataException() {
-    val jsonAdapter = moshi.newBuilder()
-      .add(
-        object {
-          @Suppress("UNUSED_PARAMETER")
-          @FromJson
-          fun fromJson(string: String): String? = null
-        },
-      )
-      .build()
-      .adapter<HasNonNullPropertyDifferentJsonName>()
+  @Test
+  fun nonNullPropertyWithJsonNameSetToNullFromAdapterFailsWithJsonDataException() {
+    val jsonAdapter =
+      moshi
+        .newBuilder()
+        .add(
+          object {
+            @Suppress("UNUSED_PARAMETER") @FromJson fun fromJson(string: String): String? = null
+          }
+        )
+        .build()
+        .adapter<HasNonNullPropertyDifferentJsonName>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("{\"aPrime\":\"hello\"}")
       fail()
     } catch (expected: JsonDataException) {
-      assertThat(expected).hasMessageThat().isEqualTo("Non-null value 'a' (JSON name 'aPrime') was null at \$.aPrime")
+      assertThat(expected)
+        .hasMessageThat()
+        .isEqualTo("Non-null value 'a' (JSON name 'aPrime') was null at \$.aPrime")
     }
   }
 
   @JsonClass(generateAdapter = true)
   class HasNonNullPropertyDifferentJsonName {
-    @Json(name = "aPrime")
-    var a: String = ""
+    @Json(name = "aPrime") var a: String = ""
   }
 
-  @Test fun nonNullConstructorParameterCalledWithNullFailsWithJsonDataException() {
+  @Test
+  fun nonNullConstructorParameterCalledWithNullFailsWithJsonDataException() {
     val jsonAdapter = moshi.adapter<HasNonNullConstructorParameter>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("{\"a\":null}")
       fail()
     } catch (expected: JsonDataException) {
@@ -157,20 +170,21 @@ class DualKotlinTest {
     }
   }
 
-  @Test fun nonNullConstructorParameterCalledWithNullFromAdapterFailsWithJsonDataException() {
-    val jsonAdapter = moshi.newBuilder()
-      .add(
-        object {
-          @Suppress("UNUSED_PARAMETER")
-          @FromJson
-          fun fromJson(string: String): String? = null
-        },
-      )
-      .build()
-      .adapter<HasNonNullConstructorParameter>()
+  @Test
+  fun nonNullConstructorParameterCalledWithNullFromAdapterFailsWithJsonDataException() {
+    val jsonAdapter =
+      moshi
+        .newBuilder()
+        .add(
+          object {
+            @Suppress("UNUSED_PARAMETER") @FromJson fun fromJson(string: String): String? = null
+          }
+        )
+        .build()
+        .adapter<HasNonNullConstructorParameter>()
 
     try {
-      //language=JSON
+      // language=JSON
       jsonAdapter.fromJson("{\"a\":\"hello\"}")
       fail()
     } catch (expected: JsonDataException) {
@@ -178,159 +192,149 @@ class DualKotlinTest {
     }
   }
 
-  @Retention(RUNTIME)
-  annotation class Nullable
+  @Retention(RUNTIME) annotation class Nullable
 
-  @JsonClass(generateAdapter = true)
-  data class HasNonNullConstructorParameter(val a: String)
+  @JsonClass(generateAdapter = true) data class HasNonNullConstructorParameter(val a: String)
 
-  @JsonClass(generateAdapter = true)
-  data class HasNullableConstructorParameter(val a: String?)
+  @JsonClass(generateAdapter = true) data class HasNullableConstructorParameter(val a: String?)
 
-  @Test fun delegatesToInstalledAdaptersBeforeNullChecking() {
-    val localMoshi = moshi.newBuilder()
-      .add(
-        object {
-          @FromJson
-          fun fromJson(@Nullable string: String?): String {
-            return string ?: "fallback"
+  @Test
+  fun delegatesToInstalledAdaptersBeforeNullChecking() {
+    val localMoshi =
+      moshi
+        .newBuilder()
+        .add(
+          object {
+            @FromJson
+            fun fromJson(@Nullable string: String?): String {
+              return string ?: "fallback"
+            }
+
+            @ToJson
+            fun toJson(@Nullable value: String?): String {
+              return value ?: "fallback"
+            }
           }
+        )
+        .build()
 
-          @ToJson
-          fun toJson(@Nullable value: String?): String {
-            return value ?: "fallback"
-          }
-        },
-      )
-      .build()
-
-    val hasNonNullConstructorParameterAdapter =
-      localMoshi.adapter<HasNonNullConstructorParameter>()
+    val hasNonNullConstructorParameterAdapter = localMoshi.adapter<HasNonNullConstructorParameter>()
     assertThat(
-      //language=JSON
-      hasNonNullConstructorParameterAdapter
-        .fromJson("{\"a\":null}"),
-    ).isEqualTo(HasNonNullConstructorParameter("fallback"))
+        // language=JSON
+        hasNonNullConstructorParameterAdapter.fromJson("{\"a\":null}")
+      )
+      .isEqualTo(HasNonNullConstructorParameter("fallback"))
 
     val hasNullableConstructorParameterAdapter =
       localMoshi.adapter<HasNullableConstructorParameter>()
     assertThat(
-      //language=JSON
-      hasNullableConstructorParameterAdapter
-        .fromJson("{\"a\":null}"),
-    ).isEqualTo(HasNullableConstructorParameter("fallback"))
-    //language=JSON
-    assertThat(
-      hasNullableConstructorParameterAdapter
-        .toJson(HasNullableConstructorParameter(null)),
-    ).isEqualTo("{\"a\":\"fallback\"}")
+        // language=JSON
+        hasNullableConstructorParameterAdapter.fromJson("{\"a\":null}")
+      )
+      .isEqualTo(HasNullableConstructorParameter("fallback"))
+    // language=JSON
+    assertThat(hasNullableConstructorParameterAdapter.toJson(HasNullableConstructorParameter(null)))
+      .isEqualTo("{\"a\":\"fallback\"}")
   }
 
   @JsonClass(generateAdapter = true)
   data class HasNullableTypeWithGeneratedAdapter(val a: HasNonNullConstructorParameter?)
 
-  @Test fun delegatesToInstalledAdaptersBeforeNullCheckingWithGeneratedAdapter() {
+  @Test
+  fun delegatesToInstalledAdaptersBeforeNullCheckingWithGeneratedAdapter() {
     val adapter = moshi.adapter<HasNullableTypeWithGeneratedAdapter>()
 
     val encoded = HasNullableTypeWithGeneratedAdapter(null)
-    //language=JSON
+    // language=JSON
     assertThat(adapter.toJson(encoded)).isEqualTo("""{}""")
-    //language=JSON
+    // language=JSON
     assertThat(adapter.serializeNulls().toJson(encoded)).isEqualTo("""{"a":null}""")
 
-    //language=JSON
-    val decoded = adapter.fromJson("""{"a":null}""")!!
+    // language=JSON
+    val decoded = adapter.fromJson("""{"a":null}""")
     assertThat(decoded.a).isEqualTo(null)
   }
 
-  @Test fun valueClass() {
+  @Test
+  fun valueClass() {
     val adapter = moshi.adapter<ValueClass>()
 
     val inline = ValueClass(5)
 
-    val expectedJson =
-      """{"i":5}"""
+    val expectedJson = """{"i":5}"""
     assertThat(adapter.toJson(inline)).isEqualTo(expectedJson)
 
-    val testJson =
-      """{"i":6}"""
-    val result = adapter.fromJson(testJson)!!
+    val testJson = """{"i":6}"""
+    val result = adapter.fromJson(testJson)
     assertThat(result.i).isEqualTo(6)
 
-    // TODO doesn't work yet. https://github.com/square/moshi/issues/1170
-    //  need to invoke the constructor_impl$default static method, invoke constructor with result
-//    val testEmptyJson =
-//      """{}"""
-//    val result2 = adapter.fromJson(testEmptyJson)!!
-//    assertThat(result2.i).isEqualTo(0)
+    val testEmptyJson = """{}"""
+    val result2 = adapter.fromJson(testEmptyJson)
+    assertThat(result2.i).isEqualTo(0)
   }
 
-  @JsonClass(generateAdapter = true)
-  data class InlineConsumer(val inline: ValueClass)
+  @JsonClass(generateAdapter = false) data class InlineConsumer(val inline: ValueClass)
 
-  @Test fun inlineClassConsumer() {
+  @Test
+  fun inlineClassConsumer() {
     val adapter = moshi.adapter<InlineConsumer>()
 
     val consumer = InlineConsumer(ValueClass(23))
 
-    @Language("JSON")
-    val expectedJson =
-      """{"inline":{"i":23}}"""
+    @Language("JSON") val expectedJson = """{"inline":{"i":23}}"""
     assertThat(adapter.toJson(consumer)).isEqualTo(expectedJson)
 
-    @Language("JSON")
-    val testJson =
-      """{"inline":{"i":42}}"""
-    val result = adapter.fromJson(testJson)!!
+    @Language("JSON") val testJson = """{"inline":{"i":42}}"""
+    val result = adapter.fromJson(testJson)
     assertThat(result.inline.i).isEqualTo(42)
   }
 
   // Regression test for https://github.com/square/moshi/issues/955
-  @Test fun backwardReferencingTypeVars() {
+  @Test
+  fun backwardReferencingTypeVars() {
     val adapter = moshi.adapter<TextAssetMetaData>()
 
-    @Language("JSON")
-    val testJson =
-      """{"text":"text"}"""
+    @Language("JSON") val testJson = """{"text":"text"}"""
 
     assertThat(adapter.toJson(TextAssetMetaData("text"))).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result.text).isEqualTo("text")
   }
 
   @JsonClass(generateAdapter = true)
   class TextAssetMetaData(val text: String) : AssetMetaData<TextAsset>()
+
   class TextAsset : Asset<TextAsset>()
+
   abstract class Asset<A : Asset<A>>
+
   abstract class AssetMetaData<A : Asset<A>>
 
   // Regression test for https://github.com/ZacSweers/MoshiX/issues/125
-  @Test fun selfReferencingTypeVars() {
+  @Test
+  fun selfReferencingTypeVars() {
     val adapter = moshi.adapter<StringNodeNumberNode>()
 
-    val data = StringNodeNumberNode().also {
-      it.t = StringNodeNumberNode().also {
-        it.text = "child 1"
+    val data =
+      StringNodeNumberNode().also {
+        it.t = StringNodeNumberNode().also { it.text = "child 1" }
+        it.text = "root"
+        it.r =
+          NumberStringNode().also {
+            it.number = 0
+            it.t = NumberStringNode().also { it.number = 1 }
+            it.r = StringNodeNumberNode().also { it.text = "grand child 1" }
+          }
       }
-      it.text = "root"
-      it.r = NumberStringNode().also {
-        it.number = 0
-        it.t = NumberStringNode().also {
-          it.number = 1
-        }
-        it.r = StringNodeNumberNode().also {
-          it.text = "grand child 1"
-        }
-      }
-    }
 
     assertThat(adapter.toJson(data))
-      //language=JSON
+      // language=JSON
       .isEqualTo(
         """
         {"text":"root","r":{"number":0,"r":{"text":"grand child 1"},"t":{"number":1}},"t":{"text":"child 1"}}
-        """.trimIndent(),
+        """
+          .trimIndent()
       )
   }
 
@@ -353,16 +357,15 @@ class DualKotlinTest {
   }
 
   // Regression test for https://github.com/square/moshi/issues/968
-  @Test fun abstractSuperProperties() {
+  @Test
+  fun abstractSuperProperties() {
     val adapter = moshi.adapter<InternalAbstractProperty>()
 
-    @Language("JSON")
-    val testJson =
-      """{"test":"text"}"""
+    @Language("JSON") val testJson = """{"test":"text"}"""
 
     assertThat(adapter.toJson(InternalAbstractProperty("text"))).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result.test).isEqualTo("text")
   }
 
@@ -381,46 +384,39 @@ class DualKotlinTest {
   }
 
   // Regression test for https://github.com/square/moshi/issues/975
-  @Test fun multipleConstructors() {
+  @Test
+  fun multipleConstructors() {
     val adapter = moshi.adapter<MultipleConstructorsB>()
 
-    //language=JSON
+    // language=JSON
     assertThat(adapter.toJson(MultipleConstructorsB(6))).isEqualTo("""{"f":{"f":6},"b":6}""")
 
-    @Language("JSON")
-    val testJson =
-      """{"b":6}"""
-    val result = adapter.fromJson(testJson)!!
+    @Language("JSON") val testJson = """{"b":6}"""
+    val result = adapter.fromJson(testJson)
     assertThat(result.b).isEqualTo(6)
   }
 
-  @JsonClass(generateAdapter = true)
-  class MultipleConstructorsA(val f: Int)
+  @JsonClass(generateAdapter = true) class MultipleConstructorsA(val f: Int)
 
   @JsonClass(generateAdapter = true)
   class MultipleConstructorsB(val f: MultipleConstructorsA = MultipleConstructorsA(5), val b: Int) {
     constructor(f: Int, b: Int = 6) : this(MultipleConstructorsA(f), b)
   }
 
-  @Test fun `multiple non-property parameters`() {
+  @Test
+  fun `multiple non-property parameters`() {
     val adapter = moshi.adapter<MultipleNonPropertyParameters>()
 
-    @Language("JSON")
-    val testJson =
-      """{"prop":7}"""
+    @Language("JSON") val testJson = """{"prop":7}"""
 
     assertThat(adapter.toJson(MultipleNonPropertyParameters(7))).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result.prop).isEqualTo(7)
   }
 
   @JsonClass(generateAdapter = true)
-  class MultipleNonPropertyParameters(
-    val prop: Int,
-    param1: Int = 1,
-    param2: Int = 2,
-  ) {
+  class MultipleNonPropertyParameters(val prop: Int, param1: Int = 1, param2: Int = 2) {
     init {
       // Ensure the params always uses their default value
       require(param1 == 1)
@@ -429,25 +425,21 @@ class DualKotlinTest {
   }
 
   // Tests the case of multiple parameters with no parameter properties.
-  @Test fun `only multiple non-property parameters`() {
+  @Test
+  fun `only multiple non-property parameters`() {
     val adapter = moshi.adapter<OnlyMultipleNonPropertyParameters>()
 
-    @Language("JSON")
-    val testJson =
-      """{"prop":7}"""
+    @Language("JSON") val testJson = """{"prop":7}"""
 
     assertThat(adapter.toJson(OnlyMultipleNonPropertyParameters().apply { prop = 7 }))
       .isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result.prop).isEqualTo(7)
   }
 
   @JsonClass(generateAdapter = true)
-  class OnlyMultipleNonPropertyParameters(
-    param1: Int = 1,
-    param2: Int = 2,
-  ) {
+  class OnlyMultipleNonPropertyParameters(param1: Int = 1, param2: Int = 2) {
     init {
       // Ensure the params always uses their default value
       require(param1 == 1)
@@ -457,27 +449,30 @@ class DualKotlinTest {
     var prop: Int = 0
   }
 
-  @Test fun typeAliasUnwrapping() {
-    val adapter = moshi
-      .newBuilder()
-      .add(Types.supertypeOf(Int::class.javaObjectType), moshi.adapter<Int>())
-      .build()
-      .adapter<TypeAliasUnwrapping>()
+  @Test
+  fun typeAliasUnwrapping() {
+    val adapter =
+      moshi
+        .newBuilder()
+        .add(Types.supertypeOf(Int::class.javaObjectType), moshi.adapter<Int>())
+        .build()
+        .adapter<TypeAliasUnwrapping>()
 
     @Language("JSON")
     val testJson =
       """{"simpleClass":6,"parameterized":{"value":6},"wildcardIn":{"value":6},"wildcardOut":{"value":6},"complex":{"value":[{"value":6}]}}"""
 
-    val testValue = TypeAliasUnwrapping(
-      simpleClass = 6,
-      parameterized = GenericClass(6),
-      wildcardIn = GenericClass(6),
-      wildcardOut = GenericClass(6),
-      complex = GenericClass(listOf(GenericClass(6))),
-    )
+    val testValue =
+      TypeAliasUnwrapping(
+        simpleClass = 6,
+        parameterized = GenericClass(6),
+        wildcardIn = GenericClass(6),
+        wildcardOut = GenericClass(6),
+        complex = GenericClass(listOf(GenericClass(6))),
+      )
     assertThat(adapter.toJson(testValue)).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result).isEqualTo(testValue)
   }
 
@@ -487,32 +482,33 @@ class DualKotlinTest {
     val parameterized: GenericClass<TypeAlias>,
     val wildcardIn: GenericClass<in TypeAlias>,
     val wildcardOut: GenericClass<out TypeAlias>,
-    val complex: GenericClass<GenericTypeAlias>?,
+    @Suppress("REDUNDANT_NULLABLE") val complex: GenericClass<GenericTypeAlias?>?,
   )
 
   // Regression test for https://github.com/square/moshi/issues/991
-  @Test fun nullablePrimitiveProperties() {
+  @Test
+  fun nullablePrimitiveProperties() {
     val adapter = moshi.adapter<NullablePrimitives>()
 
     @Language("JSON")
     val testJson =
       """{"objectType":"value","boolean":true,"byte":3,"char":"a","short":3,"int":3,"long":3,"float":3.2,"double":3.2}"""
 
-    val instance = NullablePrimitives(
-      objectType = "value",
-      boolean = true,
-      byte = 3,
-      char = 'a',
-      short = 3,
-      int = 3,
-      long = 3,
-      float = 3.2f,
-      double = 3.2,
-    )
-    assertThat(adapter.toJson(instance))
-      .isEqualTo(testJson)
+    val instance =
+      NullablePrimitives(
+        objectType = "value",
+        boolean = true,
+        byte = 3,
+        char = 'a',
+        short = 3,
+        int = 3,
+        long = 3,
+        float = 3.2f,
+        double = 3.2,
+      )
+    assertThat(adapter.toJson(instance)).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result).isEqualTo(instance)
   }
 
@@ -538,24 +534,22 @@ class DualKotlinTest {
   )
 
   // Regression test for https://github.com/square/moshi/issues/990
-  @Test fun nullableProperties() {
+  @Test
+  fun nullableProperties() {
     val adapter = moshi.adapter<NullableList>()
 
-    @Language("JSON")
-    val testJson =
-      """{"nullableList":null}"""
+    @Language("JSON") val testJson = """{"nullableList":null}"""
 
-    assertThat(adapter.serializeNulls().toJson(NullableList(null)))
-      .isEqualTo(testJson)
+    assertThat(adapter.serializeNulls().toJson(NullableList(null))).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result.nullableList).isNull()
   }
 
-  @JsonClass(generateAdapter = true)
-  data class NullableList(val nullableList: List<Any>?)
+  @JsonClass(generateAdapter = true) data class NullableList(val nullableList: List<Any>?)
 
-  @Test fun typeAliasNullability() {
+  @Test
+  fun typeAliasNullability() {
     val adapter = moshi.adapter<TypeAliasNullability>()
 
     @Language("JSON")
@@ -563,10 +557,9 @@ class DualKotlinTest {
       """{"aShouldBeNonNull":3,"nullableAShouldBeNullable":null,"redundantNullableAShouldBeNullable":null,"manuallyNullableAShouldBeNullable":null,"convolutedMultiNullableShouldBeNullable":null,"deepNestedNullableShouldBeNullable":null}"""
 
     val instance = TypeAliasNullability(3, null, null, null, null, null)
-    assertThat(adapter.serializeNulls().toJson(instance))
-      .isEqualTo(testJson)
+    assertThat(adapter.serializeNulls().toJson(instance)).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result).isEqualTo(instance)
   }
 
@@ -582,80 +575,80 @@ class DualKotlinTest {
   )
 
   // Regression test for https://github.com/square/moshi/issues/1009
-  @Test fun outDeclaration() {
+  @Test
+  fun outDeclaration() {
     val adapter = moshi.adapter<OutDeclaration<Int>>()
 
-    @Language("JSON")
-    val testJson =
-      """{"input":3}"""
+    @Language("JSON") val testJson = """{"input":3}"""
 
     val instance = OutDeclaration(3)
-    assertThat(adapter.serializeNulls().toJson(instance))
-      .isEqualTo(testJson)
+    assertThat(adapter.serializeNulls().toJson(instance)).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result).isEqualTo(instance)
   }
 
-  @JsonClass(generateAdapter = true)
-  data class OutDeclaration<out T>(val input: T)
+  @JsonClass(generateAdapter = true) data class OutDeclaration<out T>(val input: T)
 
-  @Test fun intersectionTypes() {
+  @Test
+  fun intersectionTypes() {
     val adapter = moshi.adapter<IntersectionTypes<IntersectionTypesEnum>>()
 
-    @Language("JSON")
-    val testJson =
-      """{"value":"VALUE"}"""
+    @Language("JSON") val testJson = """{"value":"VALUE"}"""
 
     val instance = IntersectionTypes(IntersectionTypesEnum.VALUE)
-    assertThat(adapter.serializeNulls().toJson(instance))
-      .isEqualTo(testJson)
+    assertThat(adapter.serializeNulls().toJson(instance)).isEqualTo(testJson)
 
-    val result = adapter.fromJson(testJson)!!
+    val result = adapter.fromJson(testJson)
     assertThat(result).isEqualTo(instance)
   }
 
   interface IntersectionTypeInterface<E : Enum<E>>
 
   enum class IntersectionTypesEnum : IntersectionTypeInterface<IntersectionTypesEnum> {
-    VALUE,
+    VALUE
   }
 
   @JsonClass(generateAdapter = true)
-  data class IntersectionTypes<E>(
-    val value: E,
-  ) where E : Enum<E>, E : IntersectionTypeInterface<E>
+  data class IntersectionTypes<E>(val value: E) where E : Enum<E>, E : IntersectionTypeInterface<E>
 
-  @Test fun transientConstructorParameter() {
+  @Test
+  fun transientConstructorParameter() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     val jsonAdapter = moshi.adapter<TransientConstructorParameter>()
 
     val encoded = TransientConstructorParameter(3, 5)
     assertThat(jsonAdapter.toJson(encoded)).isEqualTo("""{"b":5}""")
 
-    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")!!
+    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")
     assertThat(decoded.a).isEqualTo(-1)
     assertThat(decoded.b).isEqualTo(6)
   }
 
   class TransientConstructorParameter(@Transient var a: Int = -1, var b: Int = -1)
 
-  @Test fun multipleTransientConstructorParameters() {
+  @Test
+  fun multipleTransientConstructorParameters() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-    val jsonAdapter = moshi.adapter(MultipleTransientConstructorParameters::class.java)
+    val jsonAdapter = moshi.adapter<MultipleTransientConstructorParameters>()
 
     val encoded = MultipleTransientConstructorParameters(3, 5, 7)
     assertThat(jsonAdapter.toJson(encoded)).isEqualTo("""{"b":5}""")
 
-    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")!!
+    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")
     assertThat(decoded.a).isEqualTo(-1)
     assertThat(decoded.b).isEqualTo(6)
     assertThat(decoded.c).isEqualTo(-1)
   }
 
-  class MultipleTransientConstructorParameters(@Transient var a: Int = -1, var b: Int = -1, @Transient var c: Int = -1)
+  class MultipleTransientConstructorParameters(
+    @Transient var a: Int = -1,
+    var b: Int = -1,
+    @Transient var c: Int = -1,
+  )
 
-  @Test fun transientProperty() {
+  @Test
+  fun transientProperty() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     val jsonAdapter = moshi.adapter<TransientProperty>()
 
@@ -665,7 +658,7 @@ class DualKotlinTest {
     encoded.c = 5
     assertThat(jsonAdapter.toJson(encoded)).isEqualTo("""{"c":5}""")
 
-    val decoded = jsonAdapter.fromJson("""{"a":4,"b":5,"c":6}""")!!
+    val decoded = jsonAdapter.fromJson("""{"a":4,"b":5,"c":6}""")
     assertThat(decoded.a).isEqualTo(-1)
     assertThat(decoded.getB()).isEqualTo(-1)
     assertThat(decoded.c).isEqualTo(6)
@@ -684,28 +677,30 @@ class DualKotlinTest {
     }
   }
 
-  @Test fun ignoredConstructorParameter() {
+  @Test
+  fun ignoredConstructorParameter() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     val jsonAdapter = moshi.adapter<IgnoredConstructorParameter>()
 
     val encoded = IgnoredConstructorParameter(3, 5)
     assertThat(jsonAdapter.toJson(encoded)).isEqualTo("""{"b":5}""")
 
-    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")!!
+    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")
     assertThat(decoded.a).isEqualTo(-1)
     assertThat(decoded.b).isEqualTo(6)
   }
 
   class IgnoredConstructorParameter(@Json(ignore = true) var a: Int = -1, var b: Int = -1)
 
-  @Test fun multipleIgnoredConstructorParameters() {
+  @Test
+  fun multipleIgnoredConstructorParameters() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-    val jsonAdapter = moshi.adapter(MultipleIgnoredConstructorParameters::class.java)
+    val jsonAdapter = moshi.adapter<MultipleIgnoredConstructorParameters>()
 
     val encoded = MultipleIgnoredConstructorParameters(3, 5, 7)
     assertThat(jsonAdapter.toJson(encoded)).isEqualTo("""{"b":5}""")
 
-    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")!!
+    val decoded = jsonAdapter.fromJson("""{"a":4,"b":6}""")
     assertThat(decoded.a).isEqualTo(-1)
     assertThat(decoded.b).isEqualTo(6)
     assertThat(decoded.c).isEqualTo(-1)
@@ -717,7 +712,8 @@ class DualKotlinTest {
     @Json(ignore = true) var c: Int = -1,
   )
 
-  @Test fun ignoredProperty() {
+  @Test
+  fun ignoredProperty() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     val jsonAdapter = moshi.adapter<IgnoredProperty>()
 
@@ -727,18 +723,16 @@ class DualKotlinTest {
     encoded.c = 5
     assertThat(jsonAdapter.toJson(encoded)).isEqualTo("""{"c":5}""")
 
-    val decoded = jsonAdapter.fromJson("""{"a":4,"b":5,"c":6}""")!!
+    val decoded = jsonAdapter.fromJson("""{"a":4,"b":5,"c":6}""")
     assertThat(decoded.a).isEqualTo(-1)
     assertThat(decoded.getB()).isEqualTo(-1)
     assertThat(decoded.c).isEqualTo(6)
   }
 
   class IgnoredProperty {
-    @Json(ignore = true)
-    var a: Int = -1
+    @Json(ignore = true) var a: Int = -1
 
-    @Json(ignore = true)
-    private var b: Int = -1
+    @Json(ignore = true) private var b: Int = -1
     var c: Int = -1
 
     fun getB() = b
@@ -748,7 +742,8 @@ class DualKotlinTest {
     }
   }
 
-  @Test fun propertyNameHasDollarSign() {
+  @Test
+  fun propertyNameHasDollarSign() {
     val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     val jsonAdapter = moshi.adapter<PropertyWithDollarSign>()
 
@@ -759,10 +754,77 @@ class DualKotlinTest {
   }
 
   @JsonClass(generateAdapter = true)
-  data class PropertyWithDollarSign(
-    val `$a`: String,
-    @Json(name = "\$b") val b: String,
-  )
+  data class PropertyWithDollarSign(val `$a`: String, @Json(name = "\$b") val b: String)
+
+  @Retention(RUNTIME)
+  @JsonQualifier
+  annotation class NestedEnum(val nested: Nested = Nested.A) {
+    enum class Nested {
+      A,
+      B,
+      C,
+    }
+  }
+
+  @Test
+  fun nestedEnumAnnotation() {
+    val moshi =
+      Moshi.Builder()
+        .add(
+          object {
+            @FromJson @NestedEnum fun fromJson(string: String): String = string
+
+            @ToJson
+            fun toJson(@NestedEnum @Nullable value: String?): String {
+              return value ?: "fallback"
+            }
+          }
+        )
+        .add(KotlinJsonAdapterFactory())
+        .build()
+    val jsonAdapter = moshi.adapter<PropertyWithNestedEnumAnnotation>()
+
+    val value = PropertyWithNestedEnumAnnotation("apple")
+    val json = """{"value":"apple"}"""
+    assertThat(jsonAdapter.toJson(value)).isEqualTo(json)
+    assertThat(jsonAdapter.fromJson(json)).isEqualTo(value)
+  }
+
+  @JsonClass(generateAdapter = true)
+  data class PropertyWithNestedEnumAnnotation(@NestedEnum val value: String)
+
+  @Test
+  fun inlineClass() {
+    val adapter = moshi.adapter<InlineValueClass>()
+
+    // Test encoding - should output raw value, not wrapped in object
+    val instance = InlineValueClass(42)
+    assertThat(adapter.toJson(instance)).isEqualTo("42")
+
+    // Test decoding from raw value
+    val decoded = adapter.fromJson("123")
+    assertThat(decoded.value).isEqualTo(123)
+  }
+
+  @Test
+  fun inlineClassNullSafe() {
+    val adapter = moshi.adapter<InlineValueClass?>()
+
+    // The adapter is wrapped with nullSafe(), so null JSON returns a null object
+    assertThat(adapter.fromJson("null")).isNull()
+    assertThat(adapter.toJson(null)).isEqualTo("null")
+  }
+
+  @Test
+  fun delegateClassWithMultiplePropertiesAreFine() {
+    val adapter = moshi.adapter<List<Location>>()
+    val location = adapter.fromJson("[{\"x\":3,\"y\":\"5\"}]")
+    assertThat(location).isEqualTo(listOf(Location(Point(3, 5))))
+  }
+
+  @JsonClass(generateAdapter = true, inline = true) data class Location(val point: Point)
+
+  @JsonClass(generateAdapter = true) data class Point(val x: Int, val y: Int)
 }
 
 typealias TypeAlias = Int
@@ -770,18 +832,27 @@ typealias TypeAlias = Int
 @Suppress("REDUNDANT_PROJECTION")
 typealias GenericTypeAlias = List<out GenericClass<in TypeAlias>?>?
 
-@JsonClass(generateAdapter = true)
-data class GenericClass<T>(val value: T)
+@JsonClass(generateAdapter = true) data class GenericClass<T>(val value: T)
 
 // Has to be outside since value classes are only allowed on top level
+@JvmInline @JsonClass(generateAdapter = true) value class ValueClass(val i: Int = 0)
+
+// Inline value classes for testing @JsonClass(inline = true)
 @JvmInline
-@JsonClass(generateAdapter = true)
-value class ValueClass(val i: Int = 0)
+@JsonClass(generateAdapter = true, inline = true)
+value class InlineValueClass(val value: Int)
 
 typealias A = Int
+
 typealias NullableA = A?
+
 typealias B = NullableA
+
+@Suppress("REDUNDANT_NULLABLE")
 typealias NullableB = B?
+
 typealias C = NullableA
+
 typealias D = C
+
 typealias E = D

@@ -19,36 +19,36 @@ package com.squareup.moshi
 
 import com.squareup.moshi.internal.NonNullJsonAdapter
 import com.squareup.moshi.internal.NullSafeJsonAdapter
+import com.squareup.moshi.internal.javaType
 import kotlin.reflect.KType
-import kotlin.reflect.javaType
 import kotlin.reflect.typeOf
 
 /**
  * @return a [JsonAdapter] for [T], creating it if necessary. Note that while nullability of [T]
- *         itself is handled, nested types (such as in generics) are not resolved.
+ *   itself is handled, nested types (such as in generics) are not resolved.
  */
 @Deprecated("Use the Moshi instance version instead", level = DeprecationLevel.HIDDEN)
-@ExperimentalStdlibApi
 public inline fun <reified T> Moshi.adapter(): JsonAdapter<T> = adapter(typeOf<T>())
 
 @Deprecated("Use the Moshi instance version instead", level = DeprecationLevel.HIDDEN)
-@ExperimentalStdlibApi
-public inline fun <reified T> Moshi.Builder.addAdapter(adapter: JsonAdapter<T>): Moshi.Builder = add(typeOf<T>().javaType, adapter)
+public inline fun <reified T> Moshi.Builder.addAdapter(adapter: JsonAdapter<T>): Moshi.Builder =
+  add(typeOf<T>(), adapter)
 
 /**
  * @return a [JsonAdapter] for [ktype], creating it if necessary. Note that while nullability of
- *         [ktype] itself is handled, nested types (such as in generics) are not resolved.
+ *   [ktype] itself is handled, nested types (such as in generics) are not resolved.
  */
 @Deprecated("Use the Moshi instance version instead", level = DeprecationLevel.HIDDEN)
-@ExperimentalStdlibApi
 public fun <T> Moshi.adapter(ktype: KType): JsonAdapter<T> {
   val adapter = adapter<T>(ktype.javaType)
-  return if (adapter is NullSafeJsonAdapter || adapter is NonNullJsonAdapter) {
-    // TODO CR - Assume that these know what they're doing? Or should we defensively avoid wrapping for matching nullability?
-    adapter
-  } else if (ktype.isMarkedNullable) {
-    adapter.nullSafe()
-  } else {
-    adapter.nonNull()
-  }
+  val finalizedAdapter =
+    if (adapter is NullSafeJsonAdapter<*> || adapter is NonNullJsonAdapter) {
+      adapter
+    } else if (ktype.isMarkedNullable) {
+      adapter.nullSafe()
+    } else {
+      adapter.nonNull()
+    }
+  @Suppress("UNCHECKED_CAST")
+  return finalizedAdapter as JsonAdapter<T>
 }

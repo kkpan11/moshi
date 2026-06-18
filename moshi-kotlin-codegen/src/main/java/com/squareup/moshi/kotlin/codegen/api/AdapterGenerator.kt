@@ -59,119 +59,108 @@ public class AdapterGenerator(
 
   private companion object {
     private val INT_TYPE_BLOCK = CodeBlock.of("%T::class.javaPrimitiveType!!", INT)
-    private val DEFAULT_CONSTRUCTOR_MARKER_TYPE_BLOCK = CodeBlock.of(
-      "%M!!",
-      MemberName(MOSHI_UTIL_PACKAGE, "DEFAULT_CONSTRUCTOR_MARKER"),
-    )
+    private val DEFAULT_CONSTRUCTOR_MARKER_TYPE_BLOCK =
+      CodeBlock.of("%M!!", MemberName(MOSHI_UTIL_PACKAGE, "DEFAULT_CONSTRUCTOR_MARKER"))
     private val CN_MOSHI = Moshi::class.asClassName()
     private val CN_TYPE = Type::class.asClassName()
 
-    private val COMMON_SUPPRESS = arrayOf(
-      // https://github.com/square/moshi/issues/1023
-      "DEPRECATION",
-      // Because we look it up reflectively
-      "unused",
-      "UNUSED_PARAMETER",
-      // Because we include underscores
-      "ClassName",
-      // Because we generate redundant `out` variance for some generics and there's no way
-      // for us to know when it's redundant.
-      "REDUNDANT_PROJECTION",
-      // Because we may generate redundant explicit types for local vars with default values.
-      // Example: 'var fooSet: Boolean = false'
-      "RedundantExplicitType",
-      // NameAllocator will just add underscores to differentiate names, which Kotlin doesn't
-      // like for stylistic reasons.
-      "LocalVariableName",
-      // KotlinPoet always generates explicit public modifiers for public members.
-      "RedundantVisibilityModifier",
-      // For LambdaTypeNames we have to import kotlin.functions.* types
-      "PLATFORM_CLASS_MAPPED_TO_KOTLIN",
-      // Cover for calling fromJson() on a Nothing property type. Theoretically nonsensical but we
-      // support it
-      "IMPLICIT_NOTHING_TYPE_ARGUMENT_IN_RETURN_POSITION",
-    ).let { suppressions ->
-      AnnotationSpec.builder(Suppress::class)
-        .useSiteTarget(FILE)
-        .addMember(
-          suppressions.indices.joinToString { "%S" },
-          *suppressions,
+    private val COMMON_SUPPRESS =
+      arrayOf(
+          // https://github.com/square/moshi/issues/1023
+          "DEPRECATION",
+          // Because we look it up reflectively
+          "unused",
+          "UNUSED_PARAMETER",
+          // Because we include underscores
+          "ClassName",
+          // Because we generate redundant `out` variance for some generics and there's no way
+          // for us to know when it's redundant.
+          "REDUNDANT_PROJECTION",
+          // Because we may generate redundant explicit types for local vars with default values.
+          // Example: 'var fooSet: Boolean = false'
+          "RedundantExplicitType",
+          // NameAllocator will just add underscores to differentiate names, which Kotlin doesn't
+          // like for stylistic reasons.
+          "LocalVariableName",
+          // KotlinPoet always generates explicit public modifiers for public members.
+          "RedundantVisibilityModifier",
+          // For LambdaTypeNames we have to import kotlin.functions.* types
+          "PLATFORM_CLASS_MAPPED_TO_KOTLIN",
+          // Cover for calling fromJson() on a Nothing property type. Theoretically nonsensical but
+          // we
+          // support it
+          "IMPLICIT_NOTHING_TYPE_ARGUMENT_IN_RETURN_POSITION",
+          // Default values use bits to track assignment, and sometimes call toInt() on something
+          // which
+          // is already an int.
+          "REDUNDANT_CALL_OF_CONVERSION_METHOD",
         )
-        .build()
-    }
+        .let { suppressions ->
+          AnnotationSpec.builder(Suppress::class)
+            .useSiteTarget(FILE)
+            .addMember(suppressions.indices.joinToString { "%S" }, *suppressions)
+            .build()
+        }
   }
 
-  private val nonTransientProperties = propertyList.filterNot { it.isTransient }
+  private val nonTransientProperties = propertyList.filterNot { it.isIgnored }
   private val className = target.typeName.rawType()
   private val visibility = target.visibility
   private val typeVariables = target.typeVariables
   private val typeVariableResolver = typeVariables.toTypeVariableResolver()
-  private val targetConstructorParams = target.constructor.parameters
-    .mapKeys { (_, param) -> param.index }
+  private val targetConstructorParams =
+    target.constructor.parameters.mapKeys { (_, param) -> param.index }
 
   private val nameAllocator = NameAllocator()
   private val adapterName = "${className.simpleNames.joinToString(separator = "_")}JsonAdapter"
   private val originalTypeName = target.typeName.stripTypeVarVariance(typeVariableResolver)
   private val originalRawTypeName = originalTypeName.rawType()
 
-  private val moshiParam = ParameterSpec.builder(
-    nameAllocator.newName("moshi"),
-    CN_MOSHI,
-  ).build()
-  private val typesParam = ParameterSpec.builder(
-    nameAllocator.newName("types"),
-    ARRAY.parameterizedBy(CN_TYPE),
-  )
-    .build()
-  private val readerParam = ParameterSpec.builder(
-    nameAllocator.newName("reader"),
-    JsonReader::class,
-  )
-    .build()
-  private val writerParam = ParameterSpec.builder(
-    nameAllocator.newName("writer"),
-    JsonWriter::class,
-  )
-    .build()
+  private val moshiParam = ParameterSpec.builder(nameAllocator.newName("moshi"), CN_MOSHI).build()
+  private val typesParam =
+    ParameterSpec.builder(nameAllocator.newName("types"), ARRAY.parameterizedBy(CN_TYPE)).build()
+  private val readerParam =
+    ParameterSpec.builder(nameAllocator.newName("reader"), JsonReader::class).build()
+  private val writerParam =
+    ParameterSpec.builder(nameAllocator.newName("writer"), JsonWriter::class).build()
 
   // Don't use NameAllocator here because it will add `_` to the name since it's a keyword, and that
   // results in it warning about not matching the overridden function's params.
   // https://github.com/square/moshi/issues/1502
-  private val valueParam = ParameterSpec.builder(
-    "value",
-    originalTypeName.copy(nullable = true),
-  )
-    .build()
-  private val jsonAdapterTypeName = JsonAdapter::class.asClassName().parameterizedBy(
-    originalTypeName,
-  )
+  private val valueParam =
+    ParameterSpec.builder("value", originalTypeName.copy(nullable = true)).build()
+  private val jsonAdapterTypeName =
+    JsonAdapter::class.asClassName().parameterizedBy(originalTypeName.copy(nullable = true))
 
   // selectName() API setup
-  private val optionsProperty = PropertySpec.builder(
-    nameAllocator.newName("options"),
-    JsonReader.Options::class.asTypeName(),
-    KModifier.PRIVATE,
-  )
-    .initializer(
-      "%T.of(%L)",
-      JsonReader.Options::class.asTypeName(),
-      nonTransientProperties
-        .map { CodeBlock.of("%S", it.jsonName) }
-        .joinToCode(", "),
-    )
-    .build()
+  private val optionsProperty =
+    PropertySpec.builder(
+        nameAllocator.newName("options"),
+        JsonReader.Options::class.asTypeName(),
+        KModifier.PRIVATE,
+      )
+      .initializer(
+        "%T.of(%L)",
+        JsonReader.Options::class.asTypeName(),
+        nonTransientProperties.map { CodeBlock.of("%S", it.jsonName) }.joinToCode(", "),
+      )
+      .build()
 
-  private val constructorProperty = PropertySpec.builder(
-    nameAllocator.newName("constructorRef"),
-    Constructor::class.asClassName().parameterizedBy(originalTypeName).copy(nullable = true),
-    KModifier.PRIVATE,
-  )
-    .addAnnotation(Volatile::class)
-    .mutable(true)
-    .initializer("null")
-    .build()
+  private val constructorProperty =
+    PropertySpec.builder(
+        nameAllocator.newName("constructorRef"),
+        Constructor::class.asClassName().parameterizedBy(originalTypeName).copy(nullable = true),
+        KModifier.PRIVATE,
+      )
+      .addAnnotation(Volatile::class)
+      .mutable(true)
+      .initializer("null")
+      .build()
 
-  public fun prepare(generateProguardRules: Boolean, typeHook: (TypeSpec) -> TypeSpec = { it }): PreparedAdapter {
+  public fun prepare(
+    generateProguardRules: Boolean,
+    typeHook: (TypeSpec) -> TypeSpec = { it },
+  ): PreparedAdapter {
     val reservedSimpleNames = mutableSetOf<String>()
     for (property in nonTransientProperties) {
       // Allocate names for simple property types first to avoid collisions
@@ -189,23 +178,25 @@ public class AdapterGenerator(
     result.addFileComment("Code generated by moshi-kotlin-codegen. Do not edit.")
     result.addAnnotation(COMMON_SUPPRESS)
     result.addType(generatedAdapter)
-    val proguardConfig = if (generateProguardRules) {
-      generatedAdapter.createProguardRule()
-    } else {
-      null
-    }
+    val proguardConfig =
+      if (generateProguardRules) {
+        generatedAdapter.createProguardRule()
+      } else {
+        null
+      }
     return PreparedAdapter(result.build(), proguardConfig)
   }
 
   private fun TypeSpec.createProguardRule(): ProguardConfig {
-    val adapterConstructorParams = when (requireNotNull(primaryConstructor).parameters.size) {
-      1 -> listOf(CN_MOSHI.reflectionName())
+    val adapterConstructorParams =
+      when (requireNotNull(primaryConstructor).parameters.size) {
+        1 -> listOf(CN_MOSHI.reflectionName())
 
-      2 -> listOf(CN_MOSHI.reflectionName(), "${CN_TYPE.reflectionName()}[]")
+        2 -> listOf(CN_MOSHI.reflectionName(), "${CN_TYPE.reflectionName()}[]")
 
-      // Should never happen
-      else -> error("Unexpected number of arguments on primary constructor: $primaryConstructor")
-    }
+        // Should never happen
+        else -> error("Unexpected number of arguments on primary constructor: $primaryConstructor")
+      }
 
     var hasDefaultProperties = false
     var parameterTypes = emptyList<String>()
@@ -216,8 +207,10 @@ public class AdapterGenerator(
         return@let
       }
       hasDefaultProperties = propertyList.any { it.hasDefault }
-      parameterTypes = AsmType.getArgumentTypes(constructorSignature.removePrefix("<init>"))
-        .map { it.toReflectionString() }
+      parameterTypes =
+        AsmType.getArgumentTypes(constructorSignature.removePrefix("<init>")).map {
+          it.toReflectionString()
+        }
     }
     return ProguardConfig(
       targetClass = className,
@@ -234,9 +227,12 @@ public class AdapterGenerator(
     result.superclass(jsonAdapterTypeName)
 
     if (typeVariables.isNotEmpty()) {
-      result.addTypeVariables(typeVariables.map { it.stripTypeVarVariance(typeVariableResolver) as TypeVariableName })
+      result.addTypeVariables(
+        typeVariables.map { it.stripTypeVarVariance(typeVariableResolver) as TypeVariableName }
+      )
       // require(types.size == 1) {
-      //   "TypeVariable mismatch: Expecting 1 type(s) for generic type variables [T], but received ${types.size} with values $types"
+      //   "TypeVariable mismatch: Expecting 1 type(s) for generic type variables [T], but received
+      // ${types.size} with values $types"
       // }
       result.addInitializerBlock(
         CodeBlock.builder()
@@ -251,7 +247,7 @@ public class AdapterGenerator(
             "${typesParam.name}.size",
           )
           .endControlFlow()
-          .build(),
+          .build()
       )
     }
 
@@ -262,19 +258,24 @@ public class AdapterGenerator(
 
     result.primaryConstructor(generateConstructor())
 
-    val typeRenderer: TypeRenderer = object : TypeRenderer() {
-      override fun renderTypeVariable(typeVariable: TypeVariableName): CodeBlock {
-        // Match only by name because equality checks for more things than just the name. For example, a base class
-        // may declare "T" but the subclass declares "T : Number", which is legal but will fail an equals() test.
-        val index = typeVariables.indexOfFirst { it.name == typeVariable.name }
-        check(index != -1) {
-          "Unexpected type variable $typeVariable"
+    val typeRenderer: TypeRenderer =
+      object : TypeRenderer() {
+        override fun renderTypeVariable(typeVariable: TypeVariableName): CodeBlock {
+          // Match only by name because equality checks for more things than just the name. For
+          // example, a base class
+          // may declare "T" but the subclass declares "T : Number", which is legal but will fail an
+          // equals() test.
+          val index = typeVariables.indexOfFirst { it.name == typeVariable.name }
+          check(index != -1) { "Unexpected type variable $typeVariable" }
+          return CodeBlock.of("%N[%L]", typesParam, index)
         }
-        return CodeBlock.of("%N[%L]", typesParam, index)
       }
+
+    // For inline types, we don't need the options property since we read the value directly
+    if (!target.isInline) {
+      result.addProperty(optionsProperty)
     }
 
-    result.addProperty(optionsProperty)
     for (uniqueAdapter in nonTransientProperties.distinctBy { it.delegateKey }) {
       result.addProperty(
         uniqueAdapter.delegateKey.generateProperty(
@@ -282,13 +283,13 @@ public class AdapterGenerator(
           typeRenderer,
           moshiParam,
           uniqueAdapter.name,
-        ),
+        )
       )
     }
 
     result.addFunction(generateToStringFun())
-    result.addFunction(generateFromJsonFun(result))
-    result.addFunction(generateToJsonFun())
+    result.addFunction(generateFromJsonFun(target.isInline, result))
+    result.addFunction(generateToJson(target.isInline))
 
     return result.build()
   }
@@ -321,12 +322,24 @@ public class AdapterGenerator(
       .build()
   }
 
-  private fun generateFromJsonFun(classBuilder: TypeSpec.Builder): FunSpec {
-    val result = FunSpec.builder("fromJson")
-      .addModifiers(KModifier.OVERRIDE)
-      .addParameter(readerParam)
-      .returns(originalTypeName)
+  private fun generateFromJsonFun(isInline: Boolean, classBuilder: TypeSpec.Builder): FunSpec {
+    val result =
+      FunSpec.builder("fromJson")
+        .addModifiers(KModifier.OVERRIDE)
+        .addParameter(readerParam)
+        .returns(originalTypeName)
 
+    return if (isInline) {
+      generateFromJsonInline(result)
+    } else {
+      generateFromJsonRegular(classBuilder, result)
+    }
+  }
+
+  private fun generateFromJsonRegular(
+    classBuilder: TypeSpec.Builder,
+    result: FunSpec.Builder,
+  ): FunSpec {
     for (property in nonTransientProperties) {
       result.addCode("%L", property.generateLocalProperty())
       if (property.hasLocalIsPresentName) {
@@ -334,9 +347,11 @@ public class AdapterGenerator(
       }
     }
 
-    val propertiesByIndex = propertyList.asSequence()
-      .filter { it.hasConstructorParameter }
-      .associateBy { it.target.parameterIndex }
+    val propertiesByIndex =
+      propertyList
+        .asSequence()
+        .filter { it.hasConstructorParameter }
+        .associateBy { it.target.parameterIndex }
     val components = mutableListOf<FromJsonComponent>()
 
     // Add parameters (± properties) first, their index matters
@@ -354,7 +369,7 @@ public class AdapterGenerator(
       if (property.target.parameterIndex in targetConstructorParams) {
         continue // Already handled
       }
-      if (property.isTransient) {
+      if (property.isIgnored) {
         continue // We don't care about these outside of constructor parameters
       }
       components += PropertyOnly(property)
@@ -362,18 +377,17 @@ public class AdapterGenerator(
 
     // Calculate how many masks we'll need. Round up if it's not evenly divisible by 32
     val propertyCount = targetConstructorParams.size
-    val maskCount = if (propertyCount == 0) {
-      0
-    } else {
-      (propertyCount + 31) / 32
-    }
+    val maskCount =
+      if (propertyCount == 0) {
+        0
+      } else {
+        (propertyCount + 31) / 32
+      }
     // Allocate mask names
-    val maskNames = Array(maskCount) { index ->
-      nameAllocator.newName("mask$index")
-    }
+    val maskNames = Array(maskCount) { index -> nameAllocator.newName("mask$index") }
     val maskAllSetValues = Array(maskCount) { -1 }
-    val useDefaultsConstructor = components.filterIsInstance<ParameterComponent>()
-      .any { it.parameter.hasDefault }
+    val useDefaultsConstructor =
+      components.filterIsInstance<ParameterComponent>().any { it.parameter.hasDefault }
     if (useDefaultsConstructor) {
       // Initialize all our masks, defaulting to fully unset (-1)
       for (maskName in maskNames) {
@@ -411,13 +425,11 @@ public class AdapterGenerator(
     }
 
     for (input in components) {
-      if (input is ParameterOnly ||
-        (input is ParameterProperty && input.property.isTransient)
-      ) {
+      if (input is ParameterOnly || (input is ParameterProperty && input.property.isIgnored)) {
         updateMaskIndexes()
         constructorPropertyTypes += input.type.asTypeBlock()
         continue
-      } else if (input is PropertyOnly && input.property.isTransient) {
+      } else if (input is PropertyOnly && input.property.isIgnored) {
         continue
       }
 
@@ -502,90 +514,115 @@ public class AdapterGenerator(
 
     val resultName = nameAllocator.newName("result")
     val hasNonConstructorProperties = nonTransientProperties.any { !it.hasConstructorParameter }
-    val returnOrResultAssignment = if (hasNonConstructorProperties) {
-      // Save the result var for reuse
-      result.addStatement("val %N: %T", resultName, originalTypeName)
-      CodeBlock.of("%N = ", resultName)
-    } else {
-      CodeBlock.of("return·")
-    }
+    val returnOrResultAssignment =
+      if (hasNonConstructorProperties) {
+        // Save the result var for reuse
+        result.addStatement("val %N: %T", resultName, originalTypeName)
+        CodeBlock.of("%N = ", resultName)
+      } else {
+        CodeBlock.of("return·")
+      }
 
     // Used to indicate we're in an if-block that's assigning our result value and
     // needs to be closed with endControlFlow
     var closeNextControlFlowInAssignment = false
 
     if (useDefaultsConstructor) {
-      // Happy path - all parameters with defaults are set
-      val allMasksAreSetBlock = maskNames.withIndex()
-        .map { (index, maskName) ->
-          CodeBlock.of("$maskName·== 0x${Integer.toHexString(maskAllSetValues[index])}.toInt()")
-        }
-        .joinToCode("·&& ")
-      result.beginControlFlow("if (%L)", allMasksAreSetBlock)
-      result.addComment("All parameters with defaults are set, invoke the constructor directly")
-      result.addCode("«%L·%T(", returnOrResultAssignment, originalTypeName)
-      var localSeparator = "\n"
-      val paramsToSet = components.filterIsInstance<ParameterProperty>()
-        .filterNot { it.property.isTransient }
-
-      // Set all non-transient property parameters
-      for (input in paramsToSet) {
-        result.addCode(localSeparator)
-        val property = input.property
-        result.addCode("%N = %N", property.name, property.localName)
-        if (property.isRequired) {
-          result.addMissingPropertyCheck(property, readerParam)
-        } else if (!input.type.isNullable) {
-          // Unfortunately incurs an intrinsic null-check even though we know it's set, but
-          // maybe in the future we can use contracts to omit them.
-          result.addCode("·as·%T", input.type)
-        }
-        localSeparator = ",\n"
-      }
-      result.addCode("\n»)\n")
-      result.nextControlFlow("else")
-      closeNextControlFlowInAssignment = true
-
-      classBuilder.addProperty(constructorProperty)
-      result.addComment("Reflectively invoke the synthetic defaults constructor")
-      // Dynamic default constructor call
-      val nonNullConstructorType = constructorProperty.type.copy(nullable = false)
-      val args = constructorPropertyTypes
-        .plus(0.until(maskCount).map { INT_TYPE_BLOCK }) // Masks, one every 32 params
-        .plus(DEFAULT_CONSTRUCTOR_MARKER_TYPE_BLOCK) // Default constructor marker is always last
-        .joinToCode(", ")
-      val coreLookupBlock = CodeBlock.of(
-        "%T::class.java.getDeclaredConstructor(%L)",
-        originalRawTypeName,
-        args,
-      )
-      val lookupBlock = if (originalTypeName is ParameterizedTypeName) {
-        CodeBlock.of("(%L·as·%T)", coreLookupBlock, nonNullConstructorType)
-      } else {
-        coreLookupBlock
-      }
-      val initializerBlock = CodeBlock.of(
-        "this.%1N·?: %2L.also·{ this.%1N·= it }",
-        constructorProperty,
-        lookupBlock,
-      )
-      val localConstructorProperty = PropertySpec.builder(
-        nameAllocator.newName("localConstructor"),
-        nonNullConstructorType,
-      )
-        .addAnnotation(
-          AnnotationSpec.builder(Suppress::class)
-            .addMember("%S", "UNCHECKED_CAST")
-            .build(),
+      if (target.isValueClass) {
+        // Special case for value classes with defaults
+        // For value classes, we want to call the constructor directly, omitting arguments when
+        // they weren't present in the JSON (according to the mask) so defaults can be used.
+        val paramProperty = components.filterIsInstance<ParameterProperty>().single()
+        val maskName = maskNames.single() // Value classes only have one parameter
+        val maskSetValue = maskAllSetValues.single()
+        // return if (mask == allSetValue) Constructor(value) else Constructor()
+        result.addCode(
+          "return·if·(%L·== 0x%L.toInt())·{\n",
+          maskName,
+          Integer.toHexString(maskSetValue),
         )
-        .initializer(initializerBlock)
-        .build()
-      result.addCode("%L", localConstructorProperty)
-      result.addCode(
-        "«%L%N.newInstance(",
-        returnOrResultAssignment,
-        localConstructorProperty,
-      )
+        result.addCode("⇥")
+        result.addComment("Property was present, invoke constructor with the value")
+        result.addCode("%T(\n", originalTypeName)
+        result.addCode("⇥%N = %N", paramProperty.property.name, paramProperty.property.localName)
+        if (paramProperty.property.isRequired) {
+          result.addMissingPropertyCheck(paramProperty.property, readerParam)
+        } else if (!paramProperty.type.isNullable) {
+          result.addCode("·as·%T", paramProperty.type)
+        }
+        result.addCode("\n⇤)\n")
+        result.addCode("⇤}·else·{\n")
+        result.addCode("⇥")
+        result.addComment("Property was absent, invoke constructor without argument to use default")
+        result.addCode("%T()\n", originalTypeName)
+        result.addCode("⇤}\n")
+        // Early return for value classes, skip the rest of the constructor logic
+        return result.build()
+      } else {
+        // Happy path - all parameters with defaults are set
+        val allMasksAreSetBlock =
+          maskNames
+            .withIndex()
+            .map { (index, maskName) ->
+              CodeBlock.of("$maskName·== 0x${Integer.toHexString(maskAllSetValues[index])}.toInt()")
+            }
+            .joinToCode("·&& ")
+        result.beginControlFlow("if (%L)", allMasksAreSetBlock)
+        result.addComment("All parameters with defaults are set, invoke the constructor directly")
+        result.addCode("«%L·%T(", returnOrResultAssignment, originalTypeName)
+        var localSeparator = "\n"
+        val paramsToSet =
+          components.filterIsInstance<ParameterProperty>().filterNot { it.property.isIgnored }
+
+        // Set all non-transient property parameters
+        for (input in paramsToSet) {
+          result.addCode(localSeparator)
+          val property = input.property
+          result.addCode("%N = %N", property.name, property.localName)
+          if (property.isRequired) {
+            result.addMissingPropertyCheck(property, readerParam)
+          } else if (!input.type.isNullable) {
+            // Unfortunately incurs an intrinsic null-check even though we know it's set, but
+            // maybe in the future we can use contracts to omit them.
+            result.addCode("·as·%T", input.type)
+          }
+          localSeparator = ",\n"
+        }
+        result.addCode("\n»)\n")
+        result.nextControlFlow("else")
+        closeNextControlFlowInAssignment = true
+
+        classBuilder.addProperty(constructorProperty)
+        result.addComment("Reflectively invoke the synthetic defaults constructor")
+        // Dynamic default constructor call
+        val nonNullConstructorType = constructorProperty.type.copy(nullable = false)
+        val args =
+          constructorPropertyTypes
+            .plus(0.until(maskCount).map { INT_TYPE_BLOCK }) // Masks, one every 32 params
+            .plus(
+              DEFAULT_CONSTRUCTOR_MARKER_TYPE_BLOCK
+            ) // Default constructor marker is always last
+            .joinToCode(", ")
+        val coreLookupBlock =
+          CodeBlock.of("%T::class.java.getDeclaredConstructor(%L)", originalRawTypeName, args)
+        val lookupBlock =
+          if (originalTypeName is ParameterizedTypeName) {
+            CodeBlock.of("(%L·as·%T)", coreLookupBlock, nonNullConstructorType)
+          } else {
+            coreLookupBlock
+          }
+        val initializerBlock =
+          CodeBlock.of("this.%1N·?: %2L.also·{ this.%1N·= it }", constructorProperty, lookupBlock)
+        val localConstructorProperty =
+          PropertySpec.builder(nameAllocator.newName("localConstructor"), nonNullConstructorType)
+            .addAnnotation(
+              AnnotationSpec.builder(Suppress::class).addMember("%S", "UNCHECKED_CAST").build()
+            )
+            .initializer(initializerBlock)
+            .build()
+        result.addCode("%L", localConstructorProperty)
+        result.addCode("«%L%N.newInstance(", returnOrResultAssignment, localConstructorProperty)
+      }
     } else {
       // Standard constructor call. Don't omit generics for parameterized types even if they can be
       // inferred, as calculating the right condition for inference exceeds the value gained from
@@ -596,7 +633,7 @@ public class AdapterGenerator(
     for (input in components.filterIsInstance<ParameterComponent>()) {
       result.addCode(separator)
       if (useDefaultsConstructor) {
-        if (input is ParameterOnly || (input is ParameterProperty && input.property.isTransient)) {
+        if (input is ParameterOnly || (input is ParameterProperty && input.property.isIgnored)) {
           // We have to use the default primitive for the available type in order for
           // invokeDefaultConstructor to properly invoke it. Just using "null" isn't safe because
           // the transient type may be a primitive type.
@@ -615,7 +652,7 @@ public class AdapterGenerator(
       }
       if (input is PropertyComponent) {
         val property = input.property
-        if (!property.isTransient && property.isRequired) {
+        if (!property.isIgnored && property.isRequired) {
           result.addMissingPropertyCheck(property, readerParam)
         }
       }
@@ -644,12 +681,7 @@ public class AdapterGenerator(
       }
       if (property.hasLocalIsPresentName) {
         result.beginControlFlow("if (%N)", property.localIsPresentName)
-        result.addStatement(
-          "%N.%N = %N",
-          resultName,
-          property.name,
-          property.localName,
-        )
+        result.addStatement("%N.%N = %N", resultName, property.name, property.localName)
         result.endControlFlow()
       } else {
         result.addStatement(
@@ -677,25 +709,34 @@ public class AdapterGenerator(
     )
   }
 
-  private fun generateToJsonFun(): FunSpec {
-    val result = FunSpec.builder("toJson")
-      .addModifiers(KModifier.OVERRIDE)
-      .addParameter(writerParam)
-      .addParameter(valueParam)
+  private fun generateToJson(isInline: Boolean): FunSpec {
+    val builder =
+      FunSpec.builder("toJson")
+        .addModifiers(KModifier.OVERRIDE)
+        .addParameter(writerParam)
+        .addParameter(valueParam)
 
-    result.beginControlFlow("if (%N == null)", valueParam)
-    result.addStatement(
+    return if (isInline) {
+      generateToJsonInline(builder)
+    } else {
+      generateToJsonRegular(builder)
+    }
+  }
+
+  private fun generateToJsonRegular(builder: FunSpec.Builder): FunSpec {
+    builder.beginControlFlow("if (%N == null)", valueParam)
+    builder.addStatement(
       "throw·%T(%S)",
       NullPointerException::class,
       "${valueParam.name} was null! Wrap in .nullSafe() to write nullable values.",
     )
-    result.endControlFlow()
+    builder.endControlFlow()
 
-    result.addStatement("%N.beginObject()", writerParam)
+    builder.addStatement("%N.beginObject()", writerParam)
     nonTransientProperties.forEach { property ->
       // We manually put in quotes because we know the jsonName is already escaped
-      result.addStatement("%N.name(%S)", writerParam, property.jsonName)
-      result.addStatement(
+      builder.addStatement("%N.name(%S)", writerParam, property.jsonName)
+      builder.addStatement(
         "%N.toJson(%N, %N.%N)",
         nameAllocator[property.delegateKey],
         writerParam,
@@ -703,13 +744,65 @@ public class AdapterGenerator(
         property.name,
       )
     }
-    result.addStatement("%N.endObject()", writerParam)
+    builder.addStatement("%N.endObject()", writerParam)
 
-    return result.build()
+    return builder.build()
+  }
+
+  /** Generates a fromJson function for inline types that reads the value directly. */
+  private fun generateFromJsonInline(builder: FunSpec.Builder): FunSpec {
+    val property = nonTransientProperties.single()
+
+    // Read the value directly
+    if (property.delegateKey.nullable) {
+      builder.addStatement(
+        "val %N = %N.fromJson(%N)",
+        property.localName,
+        nameAllocator[property.delegateKey],
+        readerParam,
+      )
+    } else {
+      val exception = unexpectedNull(property, readerParam)
+      builder.addStatement(
+        "val %N = %N.fromJson(%N) ?: throw·%L",
+        property.localName,
+        nameAllocator[property.delegateKey],
+        readerParam,
+        exception,
+      )
+    }
+    builder.addStatement("return %T(%N = %N)", originalTypeName, property.name, property.localName)
+
+    return builder.build()
+  }
+
+  /** Generates a toJson function for inline types that writes the value directly. */
+  private fun generateToJsonInline(builder: FunSpec.Builder): FunSpec {
+    builder.beginControlFlow("if (%N == null)", valueParam)
+    builder.addStatement(
+      "throw·%T(%S)",
+      NullPointerException::class,
+      "${valueParam.name} was null! Wrap in .nullSafe() to write nullable values.",
+    )
+    builder.endControlFlow()
+
+    val property = nonTransientProperties.single()
+    builder.addStatement(
+      "%N.toJson(%N, %N.%N)",
+      nameAllocator[property.delegateKey],
+      writerParam,
+      valueParam,
+      property.name,
+    )
+
+    return builder.build()
   }
 }
 
-private fun FunSpec.Builder.addMissingPropertyCheck(property: PropertyGenerator, readerParam: ParameterSpec) {
+private fun FunSpec.Builder.addMissingPropertyCheck(
+  property: PropertyGenerator,
+  readerParam: ParameterSpec,
+) {
   val missingPropertyBlock =
     CodeBlock.of(
       "%M(%S, %S, %N)",
@@ -745,12 +838,13 @@ private fun AsmType.toReflectionString(): String {
 
     AsmType.DOUBLE_TYPE -> "double"
 
-    else -> when (sort) {
-      AsmType.ARRAY -> "${elementType.toReflectionString()}[]"
+    else ->
+      when (sort) {
+        AsmType.ARRAY -> "${elementType.toReflectionString()}[]"
 
-      // Object type
-      else -> className
-    }
+        // Object type
+        else -> className
+      }
   }
 }
 
@@ -772,26 +866,20 @@ private sealed class FromJsonComponent {
 
   abstract val type: TypeName
 
-  data class ParameterOnly(
-    override val parameter: TargetParameter,
-  ) : FromJsonComponent(),
-    ParameterComponent {
+  data class ParameterOnly(override val parameter: TargetParameter) :
+    FromJsonComponent(), ParameterComponent {
     override val type: TypeName = parameter.type
   }
 
-  data class PropertyOnly(
-    override val property: PropertyGenerator,
-  ) : FromJsonComponent(),
-    PropertyComponent {
+  data class PropertyOnly(override val property: PropertyGenerator) :
+    FromJsonComponent(), PropertyComponent {
     override val type: TypeName = property.target.type
   }
 
   data class ParameterProperty(
     override val parameter: TargetParameter,
     override val property: PropertyGenerator,
-  ) : FromJsonComponent(),
-    ParameterComponent,
-    PropertyComponent {
+  ) : FromJsonComponent(), ParameterComponent, PropertyComponent {
     override val type: TypeName = parameter.type
   }
 }

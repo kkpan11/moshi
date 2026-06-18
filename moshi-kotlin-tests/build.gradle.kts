@@ -1,5 +1,5 @@
-import Build_gradle.TestMode.KSP
-import Build_gradle.TestMode.REFLECT
+import TestMode.KSP
+import TestMode.REFLECT
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -12,31 +12,30 @@ enum class TestMode {
   KSP,
 }
 
-val testMode =
-  findProperty("kotlinTestMode")
-    ?.toString()
-    ?.let(TestMode::valueOf)
-    ?: REFLECT
+val testMode = findProperty("kotlinTestMode")?.toString()?.let(TestMode::valueOf) ?: REFLECT
 
 when (testMode) {
   REFLECT -> {
     // Do nothing!
   }
+
   KSP -> {
     apply(plugin = "com.google.devtools.ksp")
   }
 }
 
 tasks.withType<Test>().configureEach {
-  // ExtendsPlatformClassWithProtectedField tests a case where we set a protected ByteArrayOutputStream.buf field
+  // ExtendsPlatformClassWithProtectedField tests a case where we set a protected
+  // ByteArrayOutputStream.buf field
   jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED")
 }
 
 tasks.withType<KotlinCompile>().configureEach {
   compilerOptions {
     allWarningsAsErrors.set(true)
-    freeCompilerArgs.add(
+    freeCompilerArgs.addAll(
       "-opt-in=kotlin.ExperimentalStdlibApi",
+      "-Xannotation-default-target=param-property",
     )
   }
 }
@@ -46,6 +45,7 @@ dependencies {
     REFLECT -> {
       // Do nothing
     }
+
     KSP -> {
       "kspTest"(project(":moshi-kotlin-codegen"))
     }

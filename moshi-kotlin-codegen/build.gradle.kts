@@ -1,24 +1,17 @@
-import com.vanniktech.maven.publish.JavadocJar.None
-import com.vanniktech.maven.publish.KotlinJvm
-import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   kotlin("jvm")
   id("com.google.devtools.ksp")
-  id("com.vanniktech.maven.publish.base")
+  id("com.vanniktech.maven.publish")
 }
 
 tasks.withType<KotlinCompile>().configureEach {
-  compilerOptions {
-    optIn.add("com.squareup.moshi.kotlin.codegen.api.InternalMoshiCodegenApi")
-  }
+  compilerOptions { optIn.add("com.squareup.moshi.kotlin.codegen.api.InternalMoshiCodegenApi") }
 }
 
 tasks.compileTestKotlin {
-  compilerOptions {
-    optIn.add("org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi")
-  }
+  compilerOptions { optIn.add("org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi") }
 }
 
 tasks.test {
@@ -33,7 +26,6 @@ dependencies {
   implementation(project(":moshi"))
   api(libs.kotlinpoet)
   implementation(libs.kotlinpoet.ksp)
-  implementation(libs.guava)
   implementation(libs.asm)
 
   implementation(libs.autoService)
@@ -57,8 +49,4 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.truth)
   testImplementation(libs.kotlinCompileTesting)
-}
-
-configure<MavenPublishBaseExtension> {
-  configure(KotlinJvm(javadocJar = None()))
 }

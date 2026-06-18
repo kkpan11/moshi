@@ -24,7 +24,7 @@ import com.squareup.kotlinpoet.PropertySpec
 public class PropertyGenerator(
   public val target: TargetProperty,
   public val delegateKey: DelegateKey,
-  public val isTransient: Boolean = false,
+  public val isIgnored: Boolean = false,
 ) {
   public val name: String = target.name
   public val jsonName: String = target.jsonName ?: target.name
@@ -33,9 +33,11 @@ public class PropertyGenerator(
   public lateinit var localName: String
   public lateinit var localIsPresentName: String
 
-  public val isRequired: Boolean get() = !delegateKey.nullable && !hasDefault
+  public val isRequired: Boolean
+    get() = !delegateKey.nullable && !hasDefault
 
-  public val hasConstructorParameter: Boolean get() = target.parameterIndex != -1
+  public val hasConstructorParameter: Boolean
+    get() = target.parameterIndex != -1
 
   /**
    * IsPresent is required if the following conditions are met:
@@ -47,7 +49,8 @@ public class PropertyGenerator(
    * This is used to indicate that presence should be checked first before possible assigning null
    * to an absent value
    */
-  public val hasLocalIsPresentName: Boolean = !isTransient && hasDefault && !hasConstructorParameter && delegateKey.nullable
+  public val hasLocalIsPresentName: Boolean =
+    !isIgnored && hasDefault && !hasConstructorParameter && delegateKey.nullable
   public val hasConstructorDefault: Boolean = hasDefault && hasConstructorParameter
 
   internal fun allocateNames(nameAllocator: NameAllocator) {

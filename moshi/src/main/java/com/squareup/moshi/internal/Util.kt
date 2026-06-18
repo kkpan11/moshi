@@ -26,27 +26,20 @@ import com.squareup.moshi.JsonQualifier
 import com.squareup.moshi.JsonReader
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import com.squareup.moshi.Types.getRawType
 import com.squareup.moshi.asArrayType
 import com.squareup.moshi.rawType
-import java.lang.ClassNotFoundException
-import java.lang.Error
-import java.lang.IllegalAccessException
-import java.lang.IllegalStateException
-import java.lang.InstantiationException
-import java.lang.NoSuchMethodException
-import java.lang.RuntimeException
-import java.lang.StringBuilder
-import java.lang.Void
 import java.lang.reflect.AnnotatedElement
 import java.lang.reflect.Constructor
 import java.lang.reflect.GenericArrayType
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Proxy
 import java.lang.reflect.Type
 import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.util.Collections
-import java.util.LinkedHashSet
+import java.util.Properties
 import kotlin.contracts.contract
 
 @JvmField internal val NO_ANNOTATIONS: Set<Annotation> = emptySet()
@@ -54,33 +47,36 @@ import kotlin.contracts.contract
 @JvmField internal val EMPTY_TYPE_ARRAY: Array<Type> = arrayOf()
 
 @Suppress("UNCHECKED_CAST")
-private val METADATA: Class<out Annotation>? = try {
-  Class.forName(kotlinMetadataClassName) as Class<out Annotation>
-} catch (ignored: ClassNotFoundException) {
-  null
-}
+private val METADATA: Class<out Annotation>? =
+  try {
+    Class.forName(kotlinMetadataClassName) as Class<out Annotation>
+  } catch (_: ClassNotFoundException) {
+    null
+  }
 
 // We look up the constructor marker separately because Metadata might be (justifiably)
 // stripped by R8/Proguard but the DefaultConstructorMarker is still present.
 @JvmField
-public val DEFAULT_CONSTRUCTOR_MARKER: Class<*>? = try {
-  Class.forName("kotlin.jvm.internal.DefaultConstructorMarker")
-} catch (ignored: ClassNotFoundException) {
-  null
-}
+public val DEFAULT_CONSTRUCTOR_MARKER: Class<*>? =
+  try {
+    Class.forName("kotlin.jvm.internal.DefaultConstructorMarker")
+  } catch (_: ClassNotFoundException) {
+    null
+  }
 
 /** A map from primitive types to their corresponding wrapper types. */
-private val PRIMITIVE_TO_WRAPPER_TYPE: Map<Class<*>, Class<*>> = buildMap(16) {
-  put(knownNotNull(Boolean::class.javaPrimitiveType), Boolean::class.java)
-  put(knownNotNull(Byte::class.javaPrimitiveType), Byte::class.java)
-  put(knownNotNull(Char::class.javaPrimitiveType), Char::class.java)
-  put(knownNotNull(Double::class.javaPrimitiveType), Double::class.java)
-  put(knownNotNull(Float::class.javaPrimitiveType), Float::class.java)
-  put(knownNotNull(Int::class.javaPrimitiveType), Int::class.java)
-  put(knownNotNull(Long::class.javaPrimitiveType), Long::class.java)
-  put(knownNotNull(Short::class.javaPrimitiveType), Short::class.java)
-  put(Void.TYPE, Void::class.java)
-}
+private val PRIMITIVE_TO_WRAPPER_TYPE: Map<Class<*>, Class<*>> =
+  buildMap(16) {
+    put(knownNotNull(Boolean::class.javaPrimitiveType), Boolean::class.java)
+    put(knownNotNull(Byte::class.javaPrimitiveType), Byte::class.java)
+    put(knownNotNull(Char::class.javaPrimitiveType), Char::class.java)
+    put(knownNotNull(Double::class.javaPrimitiveType), Double::class.java)
+    put(knownNotNull(Float::class.javaPrimitiveType), Float::class.java)
+    put(knownNotNull(Int::class.javaPrimitiveType), Int::class.java)
+    put(knownNotNull(Long::class.javaPrimitiveType), Long::class.java)
+    put(knownNotNull(Short::class.javaPrimitiveType), Short::class.java)
+    put(Void.TYPE, Void::class.java)
+  }
 
 // Extracted as a method with a keep rule to prevent R8 from keeping Kotlin Metadata
 private val kotlinMetadataClassName: String
@@ -96,11 +92,6 @@ internal fun Json?.jsonName(declaredName: String): String {
   return if (Json.UNSET_NAME == annotationName) declaredName else annotationName
 }
 
-internal fun typesMatch(pattern: Type, candidate: Type): Boolean {
-  // TODO: permit raw types (like Set.class) to match non-raw candidates (like Set<Long>).
-  return Types.equals(pattern, candidate)
-}
-
 internal val AnnotatedElement.jsonAnnotations: Set<Annotation>
   get() = annotations.jsonAnnotations
 
@@ -109,7 +100,9 @@ public val Array<Annotation>.jsonAnnotations: Set<Annotation>
     var result: MutableSet<Annotation>? = null
     for (annotation in this) {
       @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
-      if ((annotation as java.lang.annotation.Annotation).annotationType()
+      if (
+        (annotation as java.lang.annotation.Annotation)
+          .annotationType()
           .isAnnotationPresent(JsonQualifier::class.java)
       ) {
         if (result == null) result = LinkedHashSet()
@@ -119,13 +112,13 @@ public val Array<Annotation>.jsonAnnotations: Set<Annotation>
     return if (result != null) Collections.unmodifiableSet(result) else NO_ANNOTATIONS
   }
 
-internal fun Set<Annotation>.isAnnotationPresent(
-  annotationClass: Class<out Annotation>,
-): Boolean {
+internal fun Set<Annotation>.isAnnotationPresent(annotationClass: Class<out Annotation>): Boolean {
   if (isEmpty()) return false // Save an iterator in the common case.
   for (annotation in this) {
     @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
-    if ((annotation as java.lang.annotation.Annotation).annotationType() == annotationClass) return true
+    if ((annotation as java.lang.annotation.Annotation).annotationType() == annotationClass) {
+      return true
+    }
   }
   return false
 }
@@ -135,7 +128,9 @@ internal val Array<Annotation>.hasNullable: Boolean
   get() {
     for (annotation in this) {
       @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
-      if ((annotation as java.lang.annotation.Annotation).annotationType().simpleName == "Nullable") {
+      if (
+        (annotation as java.lang.annotation.Annotation).annotationType().simpleName == "Nullable"
+      ) {
         return true
       }
     }
@@ -143,21 +138,21 @@ internal val Array<Annotation>.hasNullable: Boolean
   }
 
 /**
- * Returns true if `rawType` is built in. We don't reflect on private fields of platform
- * types because they're unspecified and likely to be different on Java vs. Android.
+ * Returns true if `rawType` is built in. We don't reflect on private fields of platform types
+ * because they're unspecified and likely to be different on Java vs. Android.
  */
 public val Class<*>.isPlatformType: Boolean
   get() {
     val name = name
-    return (
-      name.startsWith("android.") ||
-        name.startsWith("androidx.") ||
-        name.startsWith("java.") ||
-        name.startsWith("javax.") ||
-        name.startsWith("kotlin.") ||
-        name.startsWith("kotlinx.") ||
-        name.startsWith("scala.")
-      )
+    return (name.startsWith("android.") ||
+      name.startsWith("androidx.") ||
+      name.startsWith("java.") ||
+      name.startsWith("javax.") ||
+      // L8 desugared APIs
+      name.startsWith("j$.") ||
+      name.startsWith("kotlin.") ||
+      name.startsWith("kotlinx.") ||
+      name.startsWith("scala."))
   }
 
 /** Throws the cause of `e`, wrapping it if it is checked. */
@@ -169,17 +164,18 @@ internal fun InvocationTargetException.rethrowCause(): RuntimeException {
 }
 
 /**
- * Returns a type that is functionally equal but not necessarily equal according to [[Object.equals()]][Object.equals].
+ * Returns a type that is functionally equal but not necessarily equal according to
+ * [[Object.equals()]][Object.equals].
  */
 internal fun Type.canonicalize(): Type {
   return when (this) {
     is Class<*> -> {
-      if (isArray) GenericArrayTypeImpl(this@canonicalize.componentType.canonicalize()) else this
+      if (isArray) GenericArrayTypeImpl(componentType.canonicalize()) else this
     }
 
     is ParameterizedType -> {
       if (this is ParameterizedTypeImpl) return this
-      ParameterizedTypeImpl(ownerType, rawType, *actualTypeArguments)
+      ParameterizedTypeImpl(ownerType, rawType, actualTypeArguments)
     }
 
     is GenericArrayType -> {
@@ -263,7 +259,11 @@ private fun Type.resolve(
             args[t] = resolvedTypeArgument
           }
         }
-        return if (changed) ParameterizedTypeImpl(newOwnerType, original.rawType, *args) else original
+        return if (changed) {
+          ParameterizedTypeImpl(newOwnerType, original.rawType, args)
+        } else {
+          original
+        }
       }
 
       toResolve is WildcardType -> {
@@ -271,12 +271,14 @@ private fun Type.resolve(
         val originalLowerBound = original.lowerBounds
         val originalUpperBound = original.upperBounds
         if (originalLowerBound.size == 1) {
-          val lowerBound = originalLowerBound[0].resolve(context, contextRawType, visitedTypeVariables)
+          val lowerBound =
+            originalLowerBound[0].resolve(context, contextRawType, visitedTypeVariables)
           if (lowerBound !== originalLowerBound[0]) {
             return Types.supertypeOf(lowerBound)
           }
         } else if (originalUpperBound.size == 1) {
-          val upperBound = originalUpperBound[0].resolve(context, contextRawType, visitedTypeVariables)
+          val upperBound =
+            originalUpperBound[0].resolve(context, contextRawType, visitedTypeVariables)
           if (upperBound !== originalUpperBound[0]) {
             return Types.subtypeOf(upperBound)
           }
@@ -289,7 +291,11 @@ private fun Type.resolve(
   }
 }
 
-internal fun resolveTypeVariable(context: Type, contextRawType: Class<*>, unknown: TypeVariable<*>): Type {
+internal fun resolveTypeVariable(
+  context: Type,
+  contextRawType: Class<*>,
+  unknown: TypeVariable<*>,
+): Type {
   val declaredByRaw = declaringClassOf(unknown) ?: return unknown
 
   // We can't reduce this further.
@@ -302,10 +308,15 @@ internal fun resolveTypeVariable(context: Type, contextRawType: Class<*>, unknow
 }
 
 /**
- * Returns the generic supertype for `supertype`. For example, given a class `IntegerSet`, the result for when supertype is `Set.class` is `Set<Integer>` and the
- * result when the supertype is `Collection.class` is `Collection<Integer>`.
+ * Returns the generic supertype for `supertype`. For example, given a class `IntegerSet`, the
+ * result for when supertype is `Set.class` is `Set<Integer>` and the result when the supertype is
+ * `Collection.class` is `Collection<Integer>`.
  */
-internal fun getGenericSupertype(context: Type, rawTypeInitial: Class<*>, toResolve: Class<*>): Type {
+internal fun getGenericSupertype(
+  context: Type,
+  rawTypeInitial: Class<*>,
+  toResolve: Class<*>,
+): Type {
   var rawType = rawTypeInitial
   if (toResolve == rawType) {
     return context
@@ -349,31 +360,98 @@ internal fun Type.typeToString(): String {
   return if (this is Class<*>) name else toString()
 }
 
-/**
- * Returns the declaring class of `typeVariable`, or `null` if it was not declared by
- * a class.
- */
+/** Returns the declaring class of `typeVariable`, or `null` if it was not declared by a class. */
 internal fun declaringClassOf(typeVariable: TypeVariable<*>): Class<*>? {
   val genericDeclaration = typeVariable.genericDeclaration
-  return if (genericDeclaration is Class<*>) genericDeclaration else null
+  return genericDeclaration as? Class<*>
 }
 
 internal fun Type.checkNotPrimitive() {
-  require(!(this is Class<*> && isPrimitive)) { "Unexpected primitive $this. Use the boxed type." }
+  require(this !is Class<*> || !isPrimitive) { "Unexpected primitive $this. Use the boxed type." }
 }
 
 internal fun Type.toStringWithAnnotations(annotations: Set<Annotation>): String {
-  return toString() + if (annotations.isEmpty()) " (with no annotations)" else " annotated $annotations"
+  return when {
+    annotations.isEmpty() -> "$this (with no annotations)"
+    else -> "$this annotated $annotations"
+  }
 }
 
 /**
- * Loads the generated JsonAdapter for classes annotated [JsonClass]. This works because it
- * uses the same naming conventions as `JsonClassCodeGenProcessor`.
+ * Returns the element type of `type` if it is an array type, or null if it is not an array type.
  */
-public fun Moshi.generatedAdapter(
-  type: Type,
-  rawType: Class<*>,
-): JsonAdapter<*>? {
+internal fun arrayComponentType(type: Type): Type? {
+  return when (type) {
+    is GenericArrayType -> type.genericComponentType
+    is Class<*> -> type.componentType
+    else -> null
+  }
+}
+
+internal fun getGenericSuperclass(type: Type): Type {
+  val rawType = getRawType(type)
+  return rawType.genericSuperclass.resolve(type, rawType)
+}
+
+/**
+ * Returns a two element array containing this map's key and value types in positions 0 and 1
+ * respectively.
+ */
+internal fun mapKeyAndValueTypes(context: Type, contextRawType: Class<*>): Array<Type> {
+  // Work around a problem with the declaration of java.util.Properties. That class should extend
+  // Hashtable<String, String>, but it's declared to extend Hashtable<Object, Object>.
+  if (context === Properties::class.java) return arrayOf(String::class.java, String::class.java)
+  val mapType = getSupertype(context, contextRawType, MutableMap::class.java)
+  if (mapType is ParameterizedType) {
+    return mapType.actualTypeArguments
+  }
+  return arrayOf(Any::class.java, Any::class.java)
+}
+
+/**
+ * Returns the generic form of `supertype`. For example, if this is `ArrayList<String>`, this
+ * returns `Iterable<String>` given the input `Iterable.class`.
+ *
+ * @param supertype a superclass of, or interface implemented by, this.
+ */
+internal fun getSupertype(context: Type, contextRawType: Class<*>, supertype: Class<*>): Type {
+  require(supertype.isAssignableFrom(contextRawType))
+  return getGenericSupertype(context, contextRawType, supertype).resolve(context, contextRawType)
+}
+
+internal fun <T : Annotation?> createJsonQualifierImplementation(annotationType: Class<T>): T {
+  require(annotationType.isAnnotation) { "$annotationType must be an annotation." }
+  require(annotationType.isAnnotationPresent(JsonQualifier::class.java)) {
+    "$annotationType must have @JsonQualifier."
+  }
+  require(annotationType.declaredMethods.isEmpty()) { "$annotationType must not declare methods." }
+  @Suppress("UNCHECKED_CAST")
+  return Proxy.newProxyInstance(annotationType.classLoader, arrayOf<Class<*>>(annotationType)) {
+    proxy,
+    method,
+    args ->
+    when (method.name) {
+      "annotationType" -> annotationType
+
+      "equals" -> {
+        val o = args[0]
+        annotationType.isInstance(o)
+      }
+
+      "hashCode" -> 0
+
+      "toString" -> "@${annotationType.name}()"
+
+      else -> method.invoke(proxy, *args)
+    }
+  } as T
+}
+
+/**
+ * Loads the generated JsonAdapter for classes annotated [JsonClass]. This works because it uses the
+ * same naming conventions as `JsonClassCodeGenProcessor`.
+ */
+public fun Moshi.generatedAdapter(type: Type, rawType: Class<*>): JsonAdapter<*>? {
   val jsonClass = rawType.getAnnotation(JsonClass::class.java)
   if (jsonClass == null || !jsonClass.generateAdapter) {
     return null
@@ -382,7 +460,8 @@ public fun Moshi.generatedAdapter(
   var possiblyFoundAdapter: Class<out JsonAdapter<*>>? = null
   return try {
     @Suppress("UNCHECKED_CAST")
-    val adapterClass = Class.forName(adapterClassName, true, rawType.classLoader) as Class<out JsonAdapter<*>>
+    val adapterClass =
+      Class.forName(adapterClassName, true, rawType.classLoader) as Class<out JsonAdapter<*>>
     possiblyFoundAdapter = adapterClass
     var constructor: Constructor<out JsonAdapter<*>>
     var args: Array<Any>
@@ -390,9 +469,10 @@ public fun Moshi.generatedAdapter(
       val typeArgs = type.actualTypeArguments
       try {
         // Common case first
-        constructor = adapterClass.getDeclaredConstructor(Moshi::class.java, Array<Type>::class.java)
+        constructor =
+          adapterClass.getDeclaredConstructor(Moshi::class.java, Array<Type>::class.java)
         args = arrayOf(this, typeArgs)
-      } catch (e: NoSuchMethodException) {
+      } catch (_: NoSuchMethodException) {
         constructor = adapterClass.getDeclaredConstructor(Array<Type>::class.java)
         args = arrayOf(typeArgs)
       }
@@ -401,7 +481,7 @@ public fun Moshi.generatedAdapter(
         // Common case first
         constructor = adapterClass.getDeclaredConstructor(Moshi::class.java)
         args = arrayOf(this)
-      } catch (e: NoSuchMethodException) {
+      } catch (_: NoSuchMethodException) {
         constructor = adapterClass.getDeclaredConstructor()
         args = emptyArray()
       }
@@ -411,16 +491,17 @@ public fun Moshi.generatedAdapter(
   } catch (e: ClassNotFoundException) {
     throw RuntimeException("Failed to find the generated JsonAdapter class for $type", e)
   } catch (e: NoSuchMethodException) {
-    if (possiblyFoundAdapter != null && type !is ParameterizedType && possiblyFoundAdapter.typeParameters.isNotEmpty()) {
+    if (
+      possiblyFoundAdapter != null &&
+        type !is ParameterizedType &&
+        possiblyFoundAdapter.typeParameters.isNotEmpty()
+    ) {
       throw RuntimeException(
         "Failed to find the generated JsonAdapter constructor for '$type'. Suspiciously, the type was not parameterized but the target class '${possiblyFoundAdapter.canonicalName}' is generic. Consider using Types#newParameterizedType() to define these missing type variables.",
         e,
       )
     } else {
-      throw RuntimeException(
-        "Failed to find the generated JsonAdapter constructor for $type",
-        e,
-      )
+      throw RuntimeException("Failed to find the generated JsonAdapter constructor for $type", e)
     }
   } catch (e: IllegalAccessException) {
     throw RuntimeException("Failed to access the generated JsonAdapter for $type", e)
@@ -437,9 +518,9 @@ internal val Class<*>.isKotlin: Boolean
 /**
  * Reflectively looks up the defaults constructor of a kotlin class.
  *
- * @receiver the target kotlin class to instantiate.
  * @param T the type of `targetClass`.
  * @return the instantiated `targetClass` instance.
+ * @receiver the target kotlin class to instantiate.
  */
 internal fun <T> Class<T>.lookupDefaultsConstructor(): Constructor<T> {
   checkNotNull(DEFAULT_CONSTRUCTOR_MARKER) {
@@ -467,11 +548,12 @@ public fun missingProperty(
   reader: JsonReader,
 ): JsonDataException {
   val path = reader.path
-  val message = if (jsonName == propertyName) {
-    "Required value '$propertyName' missing at $path"
-  } else {
-    "Required value '$propertyName' (JSON name '$jsonName') missing at $path"
-  }
+  val message =
+    if (jsonName == propertyName) {
+      "Required value '$propertyName' missing at $path"
+    } else {
+      "Required value '$propertyName' (JSON name '$jsonName') missing at $path"
+    }
   return JsonDataException(message)
 }
 
@@ -481,21 +563,21 @@ public fun unexpectedNull(
   reader: JsonReader,
 ): JsonDataException {
   val path = reader.path
-  val message: String = if (jsonName == propertyName) {
-    "Non-null value '$propertyName' was null at $path"
-  } else {
-    "Non-null value '$propertyName' (JSON name '$jsonName') was null at $path"
-  }
+  val message: String =
+    if (jsonName == propertyName) {
+      "Non-null value '$propertyName' was null at $path"
+    } else {
+      "Non-null value '$propertyName' (JSON name '$jsonName') was null at $path"
+    }
   return JsonDataException(message)
 }
 
-// Sneaky backdoor way of marking a value as non-null to the compiler and skip the null-check intrinsic.
+// Sneaky backdoor way of marking a value as non-null to the compiler and skip the null-check
+// intrinsic.
 // Safe to use (unstable) contracts since they're gone in the final bytecode
 @Suppress("NOTHING_TO_INLINE")
 internal inline fun <T> markNotNull(value: T?) {
-  contract {
-    returns() implies (value != null)
-  }
+  contract { returns() implies (value != null) }
 }
 
 @Suppress("NOTHING_TO_INLINE")
@@ -508,8 +590,7 @@ internal inline fun <T> knownNotNull(value: T?): T {
 @PublishedApi
 internal fun <T> Class<T>.boxIfPrimitive(): Class<T> {
   // cast is safe: long.class and Long.class are both of type Class<Long>
-  @Suppress("UNCHECKED_CAST")
-  val wrapped = PRIMITIVE_TO_WRAPPER_TYPE[this] as Class<T>?
+  @Suppress("UNCHECKED_CAST") val wrapped = PRIMITIVE_TO_WRAPPER_TYPE[this] as Class<T>?
   return wrapped ?: this
 }
 
@@ -520,12 +601,33 @@ internal inline fun <T : Any> checkNull(value: T?, lazyMessage: (T) -> Any) {
   }
 }
 
-internal class ParameterizedTypeImpl private constructor(
-  private val ownerType: Type?,
-  private val rawType: Type,
-  @JvmField
-  val typeArguments: Array<Type>,
+internal class ParameterizedTypeImpl(
+  ownerType: Type?,
+  rawType: Type,
+  typeArguments: Array<out Type>,
 ) : ParameterizedType {
+  private val ownerType: Type? = ownerType?.canonicalize()
+  private val rawType: Type = rawType.canonicalize()
+
+  @JvmField
+  val typeArguments: Array<Type> =
+    Array(typeArguments.size) { index ->
+      typeArguments[index].canonicalize().also { it.checkNotPrimitive() }
+    }
+
+  init {
+    // Require an owner type if the raw type needs it.
+    if (rawType is Class<*>) {
+      if (ownerType != null) {
+        require(ownerType.rawType == rawType.enclosingClass) {
+          "unexpected owner type for $rawType: $ownerType"
+        }
+      } else {
+        require(rawType.enclosingClass == null) { "unexpected owner type for $rawType: null" }
+      }
+    }
+  }
+
   override fun getActualTypeArguments() = typeArguments.clone()
 
   override fun getRawType() = rawType
@@ -541,6 +643,7 @@ internal class ParameterizedTypeImpl private constructor(
   }
 
   override fun toString(): String {
+    // TODO(jwilson): include the owner type if it's non-null.
     val result = StringBuilder(30 * (typeArguments.size + 1))
     result.append(rawType.typeToString())
     if (typeArguments.isEmpty()) {
@@ -552,36 +655,11 @@ internal class ParameterizedTypeImpl private constructor(
     }
     return result.append(">").toString()
   }
-
-  companion object {
-    @JvmName("create")
-    @JvmStatic
-    operator fun invoke(
-      ownerType: Type?,
-      rawType: Type,
-      vararg typeArguments: Type,
-    ): ParameterizedTypeImpl {
-      // Require an owner type if the raw type needs it.
-      if (rawType is Class<*>) {
-        val enclosingClass = rawType.enclosingClass
-        if (ownerType != null) {
-          require(!(enclosingClass == null || ownerType.rawType != enclosingClass)) { "unexpected owner type for $rawType: $ownerType" }
-        } else {
-          require(enclosingClass == null) { "unexpected owner type for $rawType: null" }
-        }
-      }
-      @Suppress("UNCHECKED_CAST")
-      val finalTypeArgs = typeArguments.clone() as Array<Type>
-      for (t in finalTypeArgs.indices) {
-        finalTypeArgs[t].checkNotPrimitive()
-        finalTypeArgs[t] = finalTypeArgs[t].canonicalize()
-      }
-      return ParameterizedTypeImpl(ownerType?.canonicalize(), rawType.canonicalize(), finalTypeArgs)
-    }
-  }
 }
 
-internal class GenericArrayTypeImpl private constructor(private val componentType: Type) : GenericArrayType {
+internal class GenericArrayTypeImpl(componentType: Type) : GenericArrayType {
+  private val componentType: Type = componentType.canonicalize()
+
   override fun getGenericComponentType() = componentType
 
   @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
@@ -590,15 +668,7 @@ internal class GenericArrayTypeImpl private constructor(private val componentTyp
 
   override fun hashCode() = componentType.hashCode()
 
-  override fun toString() = componentType.typeToString() + "[]"
-
-  companion object {
-    @JvmName("create")
-    @JvmStatic
-    operator fun invoke(componentType: Type): GenericArrayTypeImpl {
-      return GenericArrayTypeImpl(componentType.canonicalize())
-    }
-  }
+  override fun toString() = "${componentType.typeToString()}[]"
 }
 
 /**
@@ -606,21 +676,35 @@ internal class GenericArrayTypeImpl private constructor(private val componentTyp
  * support what the Java 6 language needs - at most one bound. If a lower bound is set, the upper
  * bound must be Object.class.
  */
-internal class WildcardTypeImpl private constructor(
-  private val upperBound: Type,
-  private val lowerBound: Type?,
-) : WildcardType {
+internal class WildcardTypeImpl(upperBound: Type, lowerBound: Type?) : WildcardType {
+  private val upperBound: Type = upperBound.canonicalize()
+  private val lowerBound: Type? = lowerBound?.canonicalize()
+
+  constructor(
+    upperBounds: Array<Type>,
+    lowerBounds: Array<Type>,
+  ) : this(upperBounds.single(), lowerBounds.getOrNull(0)) {
+    require(lowerBounds.size <= 1)
+  }
+
+  init {
+    require(lowerBound == null || upperBound === Any::class.java)
+    upperBound.checkNotPrimitive()
+    lowerBound?.checkNotPrimitive()
+  }
 
   override fun getUpperBounds() = arrayOf(upperBound)
 
   override fun getLowerBounds() = lowerBound?.let { arrayOf(it) } ?: EMPTY_TYPE_ARRAY
 
   @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
-  override fun equals(other: Any?) = other is WildcardType && Types.equals(this, other as WildcardType?)
+  override fun equals(other: Any?) =
+    other is WildcardType && Types.equals(this, other as WildcardType?)
 
   override fun hashCode(): Int {
     // This equals Arrays.hashCode(getLowerBounds()) ^ Arrays.hashCode(getUpperBounds()).
-    return (if (lowerBound != null) 31 + lowerBound.hashCode() else 1) xor 31 + upperBound.hashCode()
+    return (if (lowerBound != null) 31 + lowerBound.hashCode() else 1) xor
+      31 + upperBound.hashCode()
   }
 
   override fun toString(): String {
@@ -628,32 +712,6 @@ internal class WildcardTypeImpl private constructor(
       lowerBound != null -> "? super ${lowerBound.typeToString()}"
       upperBound === Any::class.java -> "?"
       else -> "? extends ${upperBound.typeToString()}"
-    }
-  }
-
-  companion object {
-    @JvmStatic
-    @JvmName("create")
-    operator fun invoke(
-      upperBounds: Array<Type>,
-      lowerBounds: Array<Type>,
-    ): WildcardTypeImpl {
-      require(lowerBounds.size <= 1)
-      require(upperBounds.size == 1)
-      return if (lowerBounds.size == 1) {
-        lowerBounds[0].checkNotPrimitive()
-        require(!(upperBounds[0] !== Any::class.java))
-        WildcardTypeImpl(
-          lowerBound = lowerBounds[0].canonicalize(),
-          upperBound = Any::class.java,
-        )
-      } else {
-        upperBounds[0].checkNotPrimitive()
-        WildcardTypeImpl(
-          lowerBound = null,
-          upperBound = upperBounds[0].canonicalize(),
-        )
-      }
     }
   }
 }

@@ -16,8 +16,8 @@
 package com.squareup.moshi
 
 import com.squareup.moshi.adapters.Rfc3339DateJsonAdapter
-import okio.IOException
 import java.util.Date
+import okio.IOException
 
 @Deprecated(
   """This class moved to avoid a package name conflict in the Java Platform Module System.
@@ -25,7 +25,7 @@ import java.util.Date
   replaceWith = ReplaceWith("com.squareup.moshi.adapters.Rfc3339DateJsonAdapter"),
   level = DeprecationLevel.ERROR,
 )
-public class Rfc3339DateJsonAdapter : JsonAdapter<Date>() {
+public class Rfc3339DateJsonAdapter : JsonAdapter<Date?>() {
 
   private val delegate = Rfc3339DateJsonAdapter()
 
